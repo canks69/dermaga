@@ -94,7 +94,8 @@ release:
 	$(MAKE) check
 	cd desktop && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null
 	git add desktop/package.json
-	git commit -m "release: v$(VERSION)"
+	@# package.json can already be at this version -- tag the current commit then.
+	@git diff --cached --quiet || git commit -m "release: v$(VERSION)"
 	git tag -a "v$(VERSION)" -m "Dermaga v$(VERSION)"
 	git push origin HEAD
 	git push origin "v$(VERSION)"
