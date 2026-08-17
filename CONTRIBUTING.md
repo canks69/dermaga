@@ -49,9 +49,10 @@ docs: explain the bootstrap sequence
 chore: bump electron to 43
 ```
 
-The prefixes group the release notes, so the subject is what users read. Pull requests get labelled
-`feature`, `bug`, `performance`, `documentation` or `chore` for the same reason — see
-[.github/release.yml](.github/release.yml).
+The prefixes group the release notes, so the subject is what users read.
+[scripts/release-notes.sh](scripts/release-notes.sh) sorts the commits between two tags into
+Features, Bug fixes, Performance, Documentation and Maintenance. Preview what a release would say
+with `make notes VERSION=1.1.0`.
 
 ## Releasing
 
@@ -60,8 +61,8 @@ make release VERSION=1.1.0
 ```
 
 That one command runs `make check`, bumps `desktop/package.json`, commits, tags `v1.1.0`, pushes,
-builds the DMG with the version and commit stamped into it, and publishes a GitHub release with
-generated notes and the DMG attached.
+builds the DMG with the version and commit stamped into it, and publishes a GitHub release with the
+notes built from those commit prefixes and the DMG attached.
 
 It refuses to start on a dirty working tree, on a failing check, or when the tag already exists, so
 a tag always points at something that actually built. The version the app reports comes from

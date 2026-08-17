@@ -242,8 +242,13 @@ make release VERSION=1.1.0
 ```
 
 Runs the checks, bumps the version, tags `v1.1.0`, pushes, builds the DMG and publishes a GitHub
-release with generated notes and the artefact attached. It refuses to start on a dirty tree, a
-failing check, or an existing tag.
+release with the artefact attached. It refuses to start on a dirty tree, a failing check, or an
+existing tag.
+
+Release notes are built from the commits between the two tags, grouped by their `feat:` / `fix:` /
+`perf:` / `docs:` prefix; `make notes VERSION=1.1.0` prints them without publishing anything. If the
+last step fails — GitHub having a bad day, an expired token — `make publish VERSION=1.1.0` retries
+just that part, without re-tagging or rebuilding.
 
 The version and commit are stamped into the binary at link time, and the app reports them in the
 bottom-right of the status bar — so any running build can be traced back to the commit it came from.

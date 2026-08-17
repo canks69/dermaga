@@ -14,7 +14,7 @@ DMG     := desktop/release/Dermaga-$(VERSION)-arm64.dmg
 AGENT   := bin/dermaga-agent
 LDFLAGS := -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildDate=$(DATE)
 
-.PHONY: all agent icon desktop-deps dev check test lint fmt dist verify-dist install release publish version clean
+.PHONY: all agent icon desktop-deps dev check test lint fmt dist verify-dist install release publish notes version clean
 
 all: agent
 
@@ -110,15 +110,24 @@ publish:
 	@git rev-parse "v$(VERSION)" >/dev/null 2>&1 || { echo "no tag v$(VERSION); run: make release VERSION=$(VERSION)"; exit 1; }
 	@test -f "$(DMG)" || { echo "no DMG for $(VERSION); run: make VERSION=$(VERSION) dist"; exit 1; }
 	@git push origin "v$(VERSION)" 2>/dev/null || true
-	@if gh release view "v$(VERSION)" >/dev/null 2>&1; then \
-		echo "release v$(VERSION) exists; uploading the DMG"; \
+	@set -e; \
+	notes=$$(mktemp); \
+	trap 'rm -f "$$notes"' EXIT; \
+	sh scripts/release-notes.sh "v$(VERSION)" > "$$notes"; \
+	if gh release view "v$(VERSION)" >/dev/null 2>&1; then \
+		echo "release v$(VERSION) exists; updating it"; \
 		gh release upload "v$(VERSION)" "$(DMG)" --clobber; \
+		gh release edit "v$(VERSION)" --notes-file "$$notes"; \
 	else \
 		gh release create "v$(VERSION)" "$(DMG)" \
 			--title "Dermaga v$(VERSION)" \
-			--generate-notes; \
+			--notes-file "$$notes"; \
 	fi
 	@echo "released: v$(VERSION)"
+
+## Preview what the release notes for a version would say.
+notes:
+	@sh scripts/release-notes.sh "v$(VERSION)"
 
 ## What this build reports about itself.
 version:
