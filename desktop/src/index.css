@@ -114,6 +114,13 @@
     @apply h-7 rounded-md border border-ink-300 bg-ink-50 px-2.5 text-xs text-ink-800 transition-colors placeholder:text-ink-500 focus:border-brand-600 focus:outline-hidden focus:ring-2 focus:ring-brand-600/20 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100;
   }
 
+  /* The same skin as .input, but a box that holds several lines. .input carries
+     the fixed control height every button and field shares, which squashes a
+     textarea to a single line however many rows it asks for. */
+  .textarea {
+    @apply min-h-20 resize-y rounded-md border border-ink-300 bg-ink-50 px-2.5 py-1.5 text-xs leading-relaxed text-ink-800 transition-colors placeholder:text-ink-500 focus:border-brand-600 focus:outline-hidden focus:ring-2 focus:ring-brand-600/20 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100;
+  }
+
   .label-caps {
     @apply text-tiny font-semibold uppercase tracking-wide text-ink-600 dark:text-ink-400;
   }

@@ -420,9 +420,9 @@ function BuildDialog({ onClose }: { onClose: () => void }) {
         <textarea
           value={buildArgs}
           onChange={(e) => setBuildArgs(e.target.value)}
-          rows={3}
+          rows={4}
           placeholder={'VERSION=1.2.3\nNODE_ENV=production'}
-          className="input font-mono"
+          className="textarea font-mono"
         />
       </Field>
 
