@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Download, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Download, FolderOpen, Hammer, Trash2 } from 'lucide-react';
 import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
@@ -10,14 +10,15 @@ import {
   SelectionActions,
   type Column,
 } from '../components/DataTable';
-import { Field, Modal } from '../components/form';
+import { Checkbox, Field, Modal } from '../components/form';
 import { TaskRows, runTask } from '../components/TaskRows';
 import { api } from '../services/api';
+import { pickDirectory } from '../services/ipc';
 import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
 import { useUIStore } from '../store/uiStore';
-import type { Image } from '../types';
+import type { BuildSpec, Image } from '../types';
 import { formatBytes, formatDuration, shortDigest } from '../utils/format';
 
 /**
@@ -89,6 +90,7 @@ export function ImagesPage() {
   const pushToast = useToastStore((s) => s.push);
 
   const [pulling, setPulling] = useState(false);
+  const [building, setBuilding] = useState(false);
   const [deleting, setDeleting] = useState<ImageGroup | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -156,10 +158,16 @@ export function ImagesPage() {
               </Button>
             </SelectionActions>
           ) : (
-            <button onClick={() => setPulling(true)} className="btn-primary">
-              <Download size={13} aria-hidden />
-              Pull image
-            </button>
+            <>
+              <button onClick={() => setBuilding(true)} className="btn-ghost">
+                <Hammer size={13} aria-hidden />
+                Build
+              </button>
+              <button onClick={() => setPulling(true)} className="btn-primary">
+                <Download size={13} aria-hidden />
+                Pull image
+              </button>
+            </>
           )
         }
       />
@@ -248,6 +256,8 @@ export function ImagesPage() {
 
       {pulling && <PullDialog onClose={() => setPulling(false)} />}
 
+      {building && <BuildDialog onClose={() => setBuilding(false)} />}
+
       {deleting && (
         <ConfirmDialog
           title={`Delete ${deleting.names[0]}?`}
@@ -269,6 +279,162 @@ export function ImagesPage() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Builds an image from a Dockerfile. The context directory is the only thing
+ * required; everything else maps to a flag the CLI already understands.
+ */
+function BuildDialog({ onClose }: { onClose: () => void }) {
+  const [context, setContext] = useState('');
+  const [dockerfile, setDockerfile] = useState('');
+  const [tag, setTag] = useState('');
+  const [target, setTarget] = useState('');
+  const [buildArgs, setBuildArgs] = useState('');
+  const [noCache, setNoCache] = useState(false);
+
+  // Builds run inside a buildkit container that does not exist until something
+  // starts it. Knowing up front means the first build can start it rather than
+  // failing with an error about a container the user never asked for.
+  const [builderRunning, setBuilderRunning] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    void api
+      .getBuilder()
+      .then((status) => setBuilderRunning(status.running))
+      .catch(() => setBuilderRunning(null));
+  }, []);
+
+  const choose = async () => {
+    const chosen = await pickDirectory('Choose the build context');
+    if (chosen) setContext(chosen);
+  };
+
+  const build = () => {
+    const folder = context.replace(/\/+$/, '').split('/').pop() || 'image';
+    const name = tag.trim() || folder;
+
+    const spec: BuildSpec = {
+      context,
+      dockerfile: dockerfile.trim() || undefined,
+      tag: tag.trim() || undefined,
+      target: target.trim() || undefined,
+      buildArgs: buildArgs
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean),
+      noCache,
+    };
+
+    onClose();
+
+    const start = () =>
+      void runTask({
+        id: `build:${name}`,
+        kind: 'image',
+        label: name,
+        method: 'images.build',
+        params: spec,
+      });
+
+    if (builderRunning === false) {
+      // Same row, two steps: the user asked for a build, not for a lesson in
+      // how the runtime builds things.
+      void runTask({
+        id: `build:${name}`,
+        kind: 'image',
+        label: name,
+        method: 'images.startBuilder',
+        params: undefined,
+        onDone: (failed) => {
+          if (!failed) start();
+        },
+      });
+      return;
+    }
+
+    start();
+  };
+
+  return (
+    <Modal
+      title="Build image"
+      subtitle="Progress appears in the list; you can keep working while it builds."
+      onClose={onClose}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-ghost">
+            Cancel
+          </button>
+          <button onClick={build} className="btn-primary" disabled={!context.trim()}>
+            Build
+          </button>
+        </>
+      }
+    >
+      <Field label="Context" hint="The folder COPY and ADD paths are resolved from.">
+        <div className="flex gap-2">
+          <input
+            value={context}
+            onChange={(e) => setContext(e.target.value)}
+            placeholder="/Users/you/projects/api"
+            autoFocus
+            className="input flex-1"
+          />
+          <button onClick={() => void choose()} className="btn-ghost shrink-0">
+            <FolderOpen size={13} aria-hidden />
+            Choose…
+          </button>
+        </div>
+      </Field>
+
+      <Field label="Tag" hint="Names the result, for example api:dev. Optional.">
+        <input
+          value={tag}
+          onChange={(e) => setTag(e.target.value)}
+          placeholder="api:dev"
+          className="input"
+        />
+      </Field>
+
+      <Field label="Dockerfile" hint="Relative to the context. Defaults to ./Dockerfile.">
+        <input
+          value={dockerfile}
+          onChange={(e) => setDockerfile(e.target.value)}
+          placeholder="Dockerfile"
+          className="input"
+        />
+      </Field>
+
+      <Field label="Target stage" hint="Stops at a named stage in a multi-stage build. Optional.">
+        <input
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+          placeholder="builder"
+          className="input"
+        />
+      </Field>
+
+      <Field label="Build arguments" hint="One KEY=value per line.">
+        <textarea
+          value={buildArgs}
+          onChange={(e) => setBuildArgs(e.target.value)}
+          rows={3}
+          placeholder={'VERSION=1.2.3\nNODE_ENV=production'}
+          className="input font-mono"
+        />
+      </Field>
+
+      <Checkbox checked={noCache} onChange={setNoCache} label="Build without the cache" />
+
+      {builderRunning === false && (
+        <p className="text-tiny text-ink-600 dark:text-ink-400">
+          The build container is not running yet. Dermaga will start it first — the first build
+          takes a little longer because of it.
+        </p>
+      )}
+    </Modal>
   );
 }
 

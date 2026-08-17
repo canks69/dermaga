@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"os/exec"
+	"strings"
 
 	"github.com/ryanbekhen/dermaga/internal/cli"
 	"github.com/ryanbekhen/dermaga/internal/containers"
@@ -424,6 +425,43 @@ func (a *Agent) registerImages() {
 
 		id, err := a.streams.runCommand(ctx, "pull", func(ctx context.Context) (*exec.Cmd, error) {
 			return a.images.PullCommand(ctx, args.Reference, args.Platform), nil
+		})
+		if err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{"streamId": id}, nil
+	})
+
+	a.server.Register("images.build", func(ctx context.Context, params json.RawMessage) (any, error) {
+		opts, err := decodeParams[images.BuildOptions](params)
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(opts.Context) == "" {
+			return nil, rpc.Fail("a build needs a context directory")
+		}
+
+		id, err := a.streams.runCommand(ctx, "build", func(ctx context.Context) (*exec.Cmd, error) {
+			return a.images.BuildCommand(ctx, opts), nil
+		})
+		if err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{"streamId": id}, nil
+	})
+
+	// Every build runs through a buildkit container, which does not exist until
+	// something starts it. Asked before a build, this turns a confusing failure
+	// into a step the UI can offer.
+	a.server.Register("images.builderStatus", func(ctx context.Context, _ json.RawMessage) (any, error) {
+		return a.images.BuilderStatus(ctx), nil
+	})
+
+	a.server.Register("images.startBuilder", func(ctx context.Context, _ json.RawMessage) (any, error) {
+		id, err := a.streams.runCommand(ctx, "builder", func(ctx context.Context) (*exec.Cmd, error) {
+			return a.images.StartBuilderCommand(ctx), nil
 		})
 		if err != nil {
 			return nil, rpc.Fail(err.Error())

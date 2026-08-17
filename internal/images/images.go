@@ -275,6 +275,115 @@ func (m *Manager) PullCommand(ctx context.Context, reference, platform string) *
 	return m.runner.Command(ctx, args...)
 }
 
+// BuildOptions describes one `container build` invocation. Only Context is
+// required; everything else matches a flag the CLI already understands.
+type BuildOptions struct {
+	// Context is the directory the build runs against, and the root that
+	// COPY and ADD paths are resolved from.
+	Context string `json:"context"`
+	// Dockerfile is a path to the file, relative to Context or absolute.
+	// Empty means the CLI's own default.
+	Dockerfile string   `json:"dockerfile"`
+	Tag        string   `json:"tag"`
+	Target     string   `json:"target"`
+	Platform   string   `json:"platform"`
+	BuildArgs  []string `json:"buildArgs"`
+	NoCache    bool     `json:"noCache"`
+}
+
+// BuildCommand builds an image from a Dockerfile. Output is streamed, so the
+// caller owns starting it.
+//
+// `--progress plain` matters: the default emits TTY control codes that redraw
+// in place, which turns into unreadable noise once it is relayed line by line.
+func (m *Manager) BuildCommand(ctx context.Context, opts BuildOptions) *exec.Cmd {
+	args := []string{"build", "--progress", "plain"}
+
+	if opts.Tag != "" {
+		args = append(args, "--tag", opts.Tag)
+	}
+	if opts.Dockerfile != "" {
+		args = append(args, "--file", opts.Dockerfile)
+	}
+	if opts.Target != "" {
+		args = append(args, "--target", opts.Target)
+	}
+	if opts.Platform != "" {
+		args = append(args, "--platform", opts.Platform)
+	}
+	for _, arg := range opts.BuildArgs {
+		if strings.TrimSpace(arg) != "" {
+			args = append(args, "--build-arg", arg)
+		}
+	}
+	if opts.NoCache {
+		args = append(args, "--no-cache")
+	}
+
+	// The context directory is positional and has to come last.
+	args = append(args, opts.Context)
+
+	return m.runner.Command(ctx, args...)
+}
+
+// BuilderStatus reports whether the buildkit container that every build runs
+// through is up. A Mac that has never built anything has no builder at all,
+// and the build would fail with an error about a missing container rather than
+// anything to do with the Dockerfile.
+type BuilderStatus struct {
+	Running bool   `json:"running"`
+	State   string `json:"state,omitempty"`
+	Image   string `json:"image,omitempty"`
+	CPUs    int    `json:"cpus,omitempty"`
+}
+
+func (m *Manager) BuilderStatus(ctx context.Context) BuilderStatus {
+	out, err := m.runner.Run(ctx, "builder", "status", "--format", "json")
+	if err != nil {
+		// No builder yet is reported as a failure, and is the normal state
+		// before the first build rather than something worth logging loudly.
+		return BuilderStatus{}
+	}
+
+	// The CLI answers with a list holding the one builder container, and with
+	// an empty list once it has been deleted.
+	var raw []struct {
+		Configuration struct {
+			Image struct {
+				Reference string `json:"reference"`
+			} `json:"image"`
+			Resources struct {
+				CPUs int `json:"cpus"`
+			} `json:"resources"`
+		} `json:"configuration"`
+		Status struct {
+			State string `json:"state"`
+		} `json:"status"`
+	}
+
+	if err := json.Unmarshal([]byte(out), &raw); err != nil {
+		m.logger.Error("Failed to parse builder status", "error", err)
+		return BuilderStatus{}
+	}
+
+	if len(raw) == 0 {
+		return BuilderStatus{}
+	}
+
+	return BuilderStatus{
+		Running: raw[0].Status.State == "running",
+		State:   raw[0].Status.State,
+		Image:   raw[0].Configuration.Image.Reference,
+		CPUs:    raw[0].Configuration.Resources.CPUs,
+	}
+}
+
+// StartBuilderCommand brings the buildkit container up, pulling its image on
+// first use -- which is why it is streamed rather than run and waited on.
+func (m *Manager) StartBuilderCommand(ctx context.Context) *exec.Cmd {
+	return m.runner.Command(ctx, "builder", "start")
+}
+
 func (m *Manager) Delete(ctx context.Context, reference string) error {
 	if _, err := m.runner.Run(ctx, "image", "delete", reference); err != nil {
 		m.logger.Error("Failed to delete image", "reference", reference, "error", err)

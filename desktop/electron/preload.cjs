@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('dermaga', {
 
   isFullScreen: () => ipcRenderer.invoke('dermaga:is-fullscreen'),
 
+  // Returns the chosen path, or null if the dialog was dismissed.
+  pickDirectory: (title) => ipcRenderer.invoke('dermaga:pick-directory', title),
+
   onFullScreenChange: (callback) => {
     const handler = (_event, value) => callback(Boolean(value));
     ipcRenderer.on('dermaga:fullscreen', handler);

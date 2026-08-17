@@ -29,8 +29,8 @@ everything you do is immediately visible to `container ls` and vice versa.
 - **Terminal** — a real shell in any running container or machine, backed by a pty, with a prompt,
   line editing, colours and resize.
 - **Logs** — follow container, machine and service logs, with filtering and follow-on-scroll.
-- **Images** — pull with live progress, inspect layers, build history and the config a container
-  inherits. Tags sharing a digest are shown as one image.
+- **Images** — build from a Dockerfile with live progress, pull, inspect layers, build history and
+  the config a container inherits. Tags sharing a digest are shown as one image.
 - **Volumes and networks** — create and delete, and see which containers depend on them.
 - **Machines** — create, boot, stop, resize (CPU, memory, home mount) and delete the Linux VMs.
 - **System** — start and stop the background services, read their logs, and reclaim disk space.
@@ -128,7 +128,7 @@ tell when something actually changed.
 cmd/dermaga-agent/   entrypoint: JSON-RPC on stdio
 internal/cli/        runs `container`; the only package that touches os/exec
 internal/containers/ list, lifecycle, spec, live stats
-internal/images/     list, inspect, pull, delete, prune
+internal/images/     list, inspect, build, pull, delete, prune
 internal/volumes/    ·  internal/networks/  ·  internal/machines/
 internal/system/     services and disk usage
 internal/settings/   ~/.dermaga/config.json
@@ -172,10 +172,11 @@ sequenceDiagram
 | `settings.get` `settings.save`                                                        | Preferences on disk                      |
 | `containers.list/get/spec/start/stop/remove/update`                                   | Lifecycle                                |
 | `images.list/inspect/delete/prune`                                                    | Images                                   |
+| `images.builderStatus` `images.startBuilder`                                          | The buildkit container builds run in     |
 | `volumes.*` `networks.*`                                                              | List, create, delete                     |
 | `machines.list/get/start/stop/delete/setDefault/configure`                            | Machine lifecycle                        |
 | `events.subscribe`                                                                    | Pushes `events.snapshot` on every change |
-| `containers.create` `containers.logs` `images.pull` `machines.create` `machines.logs` | Streams                                  |
+| `containers.create` `containers.logs` `images.pull` `images.build` `machines.create`  | Streams                                  |
 | `terminal.open/input/resize` `stream.cancel`                                          | pty sessions, base64 payloads            |
 
 ## Behaviour worth knowing

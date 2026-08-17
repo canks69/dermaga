@@ -1,6 +1,15 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, nativeTheme, screen, shell, session } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  nativeTheme,
+  screen,
+  shell,
+  session,
+} = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -252,6 +261,21 @@ ipcMain.handle('dermaga:invoke', async (_event, method, params) => {
 });
 
 ipcMain.handle('dermaga:is-fullscreen', () => mainWindow?.isFullScreen() ?? false);
+
+// A build needs a directory on the user's disk, and the renderer is sandboxed
+// with no filesystem access of its own. macOS grants access to whatever is
+// chosen here, so no permission prompt of ours is involved.
+ipcMain.handle('dermaga:pick-directory', async (_event, title) => {
+  if (!mainWindow) return null;
+
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: title || 'Choose a folder',
+    properties: ['openDirectory', 'createDirectory'],
+    buttonLabel: 'Choose',
+  });
+
+  return result.canceled ? null : (result.filePaths[0] ?? null);
+});
 
 ipcMain.on('splash:quit', () => app.quit());
 

@@ -272,6 +272,25 @@ export interface MachineSpec {
   virtualization?: boolean;
 }
 
+/** One `container build` run. Only the context directory is required. */
+export interface BuildSpec {
+  context: string;
+  dockerfile?: string;
+  tag?: string;
+  target?: string;
+  platform?: string;
+  buildArgs?: string[];
+  noCache?: boolean;
+}
+
+/** Whether the buildkit container every build runs through is up. */
+export interface BuilderStatus {
+  running: boolean;
+  state?: string;
+  image?: string;
+  cpus?: number;
+}
+
 export interface MachineSettings {
   cpus?: number;
   memory?: string;

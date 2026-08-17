@@ -29,8 +29,7 @@ export function useCommandProgress(method: string) {
           if (chunk.trim()) setLine(chunk.trim());
         },
         onEnd: (streamError) => {
-          const problem =
-            streamError ?? lines.find((l) => /^error|failed|cannot/i.test(l.trim()));
+          const problem = streamError ?? lines.find((l) => /^error|failed|cannot/i.test(l.trim()));
 
           if (problem) {
             setState('failed');

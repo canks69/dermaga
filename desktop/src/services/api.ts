@@ -1,6 +1,8 @@
 import { invoke } from './ipc';
 import type {
+  BuilderStatus,
   BuildInfo,
+  BuildSpec,
   Container,
   ContainerSpec,
   DiskUsage,
@@ -54,6 +56,11 @@ export const api = {
 
   async getToolchain(): Promise<ToolchainStatus> {
     return invoke('toolchain.status');
+  },
+
+  /** Whether the buildkit container is up; every build needs it running. */
+  async getBuilder(): Promise<BuilderStatus> {
+    return invoke('images.builderStatus');
   },
 
   // --- settings -----------------------------------------------------------
@@ -181,6 +188,7 @@ export const streams = {
   systemLogs: (last = '30m') => ['system.logs', { last, follow: true }] as const,
   pullImage: (reference: string, platform?: string) =>
     ['images.pull', { reference, platform }] as const,
+  buildImage: (spec: BuildSpec) => ['images.build', spec] as const,
   createMachine: (spec: MachineSpec) => ['machines.create', spec] as const,
   createContainer: (spec: ContainerSpec) => ['containers.create', spec] as const,
 };
