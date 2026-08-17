@@ -326,8 +326,14 @@ async function startUp() {
   } catch (error) {
     console.error('[dermaga] services did not start:', error.message);
     // Not fatal: the app opens on its own "services are down" screen, which
-    // can retry with the kernel option.
-    splashStep('services', 'failed', 'Could not start services');
+    // offers the fix. A fresh install almost always lands here for one reason,
+    // so name it rather than leaving the user with "could not start".
+    const kernelMissing = /kernel/i.test(error.message || '');
+    splashStep(
+      'services',
+      'failed',
+      kernelMissing ? 'A Linux kernel is needed' : 'Could not start services'
+    );
   }
 
   // 5. The window itself.

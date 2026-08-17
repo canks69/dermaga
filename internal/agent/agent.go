@@ -182,6 +182,19 @@ func (a *Agent) registerToolchain() {
 		return a.toolchain.Status(ctx), nil
 	})
 
+	// A Mac that has never run a container has no Linux kernel, and the runtime
+	// refuses to start until one is set. This is that fix, as one call.
+	a.server.Register("system.installKernel", func(ctx context.Context, _ json.RawMessage) (any, error) {
+		id, err := a.streams.runCommand(ctx, "kernel", func(ctx context.Context) (*exec.Cmd, error) {
+			return a.system.InstallKernelCommand(ctx), nil
+		})
+		if err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{"streamId": id}, nil
+	})
+
 	a.server.Register("toolchain.install", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		if !a.runner.Has("brew") {
 			return nil, rpc.Fail("Homebrew is not installed, so Dermaga cannot install the CLI for you")

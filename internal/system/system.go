@@ -137,6 +137,14 @@ func (sm *Manager) Start(ctx context.Context, installKernel bool) error {
 	return nil
 }
 
+// InstallKernelCommand downloads and installs the recommended Linux kernel,
+// which is what a fresh install is missing. It runs the same thing the CLI
+// tells the user to run by hand, and it is streamed because the download is
+// large enough that silence would look like a hang.
+func (sm *Manager) InstallKernelCommand(ctx context.Context) *exec.Cmd {
+	return sm.runner.Command(ctx, "system", "kernel", "set", "--recommended")
+}
+
 func (sm *Manager) Stop(ctx context.Context) error {
 	if _, err := sm.runner.Run(ctx, "system", "stop"); err != nil {
 		sm.logger.Error("Failed to stop system services", "error", err)
