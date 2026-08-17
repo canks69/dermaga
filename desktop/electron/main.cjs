@@ -262,6 +262,101 @@ ipcMain.handle('dermaga:invoke', async (_event, method, params) => {
 
 ipcMain.handle('dermaga:is-fullscreen', () => mainWindow?.isFullScreen() ?? false);
 
+// --- updates --------------------------------------------------------------
+//
+// Releases are ad-hoc signed, and Squirrel refuses to swap an app whose
+// signature it cannot match against the running one, so there is no silent
+// self-update to be had. This is the honest version of it: fetch the release,
+// download the DMG with progress, open it, and get out of the way so the user
+// can drop the new build over the old one.
+
+const UPDATE_REPO = 'ryanbekhen/dermaga';
+
+/** True when `candidate` is a later version than `current`. */
+function isNewer(candidate, current) {
+  const parts = (value) =>
+    String(value)
+      .replace(/^v/, '')
+      .split('.')
+      .map((n) => parseInt(n, 10) || 0);
+
+  const [a, b] = [parts(candidate), parts(current)];
+
+  for (let i = 0; i < 3; i += 1) {
+    if (a[i] !== b[i]) return a[i] > b[i];
+  }
+
+  return false;
+}
+
+ipcMain.handle('dermaga:check-update', async () => {
+  const current = app.getVersion();
+
+  const response = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
+    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Dermaga' },
+  });
+
+  if (!response.ok) throw new Error(`GitHub answered ${response.status}`);
+
+  const release = await response.json();
+  const version = String(release.tag_name || '').replace(/^v/, '');
+  const asset = (release.assets || []).find((item) => item.name?.endsWith('.dmg'));
+
+  if (!version || !asset || !isNewer(version, current)) {
+    return { available: false, current };
+  }
+
+  return {
+    available: true,
+    current,
+    version,
+    url: release.html_url,
+    assetUrl: asset.browser_download_url,
+    size: asset.size ?? 0,
+  };
+});
+
+ipcMain.handle('dermaga:download-update', async (_event, assetUrl, version) => {
+  const response = await fetch(assetUrl);
+  if (!response.ok || !response.body) throw new Error(`Download failed (${response.status})`);
+
+  const total = Number(response.headers.get('content-length')) || 0;
+  // Downloads, not a temp directory: if anything goes wrong the user still has
+  // the installer where they would expect to find it.
+  const target = path.join(app.getPath('downloads'), `Dermaga-${version}-arm64.dmg`);
+  const file = fs.createWriteStream(target);
+
+  let received = 0;
+
+  try {
+    for await (const chunk of response.body) {
+      received += chunk.length;
+      file.write(chunk);
+      mainWindow?.webContents.send('dermaga:update-progress', { received, total });
+    }
+  } catch (error) {
+    file.destroy();
+    fs.rmSync(target, { force: true });
+    throw error;
+  }
+
+  await new Promise((resolve, reject) => {
+    file.end(resolve);
+    file.on('error', reject);
+  });
+
+  return target;
+});
+
+ipcMain.handle('dermaga:install-update', async (_event, dmgPath) => {
+  const problem = await shell.openPath(dmgPath);
+  if (problem) throw new Error(problem);
+
+  // Quitting immediately would race Finder mounting the image, and the user
+  // would be left staring at a closed app and no window.
+  setTimeout(() => app.quit(), 1500);
+});
+
 // A build needs a directory on the user's disk, and the renderer is sandboxed
 // with no filesystem access of its own. macOS grants access to whatever is
 // chosen here, so no permission prompt of ours is involved.

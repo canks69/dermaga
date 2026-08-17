@@ -17,6 +17,22 @@ interface Bridge {
   isFullScreen?: () => Promise<boolean>;
   onFullScreenChange?: (callback: (value: boolean) => void) => () => void;
   pickDirectory?: (title?: string) => Promise<string | null>;
+  checkUpdate?: () => Promise<UpdateCheck>;
+  downloadUpdate?: (assetUrl: string, version: string) => Promise<string>;
+  installUpdate?: (dmgPath: string) => Promise<void>;
+  onUpdateProgress?: (
+    callback: (value: { received: number; total: number }) => void
+  ) => () => void;
+}
+
+/** What the main process found on GitHub, if anything newer is there. */
+export interface UpdateCheck {
+  available: boolean;
+  current: string;
+  version?: string;
+  url?: string;
+  assetUrl?: string;
+  size?: number;
 }
 
 declare global {
@@ -51,6 +67,23 @@ export function onNotify(callback: (message: Notification) => void): () => void 
 export function pickDirectory(title?: string): Promise<string | null> {
   return bridge().pickDirectory?.(title) ?? Promise.resolve(null);
 }
+
+export const updates = {
+  check: (): Promise<UpdateCheck> =>
+    bridge().checkUpdate?.() ?? Promise.resolve({ available: false, current: '' }),
+
+  download: (assetUrl: string, version: string): Promise<string> => {
+    const download = bridge().downloadUpdate;
+    if (!download) return Promise.reject(new Error('Updates need the desktop app'));
+    return download(assetUrl, version);
+  },
+
+  /** Opens the installer; Dermaga closes itself a moment later. */
+  install: (dmgPath: string): Promise<void> => bridge().installUpdate?.(dmgPath) ?? Promise.resolve(),
+
+  onProgress: (callback: (value: { received: number; total: number }) => void): (() => void) =>
+    bridge().onUpdateProgress?.(callback) ?? (() => {}),
+};
 
 export interface StreamHandlers {
   onData: (chunk: string) => void;

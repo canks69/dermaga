@@ -1,4 +1,5 @@
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowDownToLine, Loader2, RefreshCw } from 'lucide-react';
+import { useUpdate } from '../hooks/useUpdate';
 import type { ConnectionState } from '../hooks/useEventStream';
 import type { BuildInfo, SystemStatus } from '../types';
 
@@ -30,6 +31,8 @@ export function StatusBar({ build, system, connection, error }: StatusBarProps) 
       </div>
 
       <div className="flex shrink-0 items-center gap-3 text-ink-500">
+        <UpdatePill />
+
         {system?.cliVersion && (
           <span title="Apple Container CLI">container {system.cliVersion}</span>
         )}
@@ -43,6 +46,51 @@ export function StatusBar({ build, system, connection, error }: StatusBarProps) 
         )}
       </div>
     </footer>
+  );
+}
+
+/**
+ * Sits quiet until GitHub has something newer. One click downloads it, opens
+ * the installer and closes Dermaga -- so the whole update is that click plus a
+ * drag in Finder.
+ */
+function UpdatePill() {
+  const { update, stage, percent, error, run } = useUpdate();
+
+  if (stage === 'idle' || !update?.version) return null;
+
+  if (stage === 'downloading' || stage === 'opening') {
+    return (
+      <span className="flex items-center gap-1.5 text-brand-600 dark:text-brand-400">
+        <Loader2 size={11} className="animate-spin" aria-hidden />
+        {stage === 'opening'
+          ? 'Opening the installer…'
+          : `Downloading v${update.version}… ${percent}%`}
+      </span>
+    );
+  }
+
+  if (stage === 'failed') {
+    return (
+      <button
+        onClick={() => void run()}
+        title={error ?? undefined}
+        className="flex items-center gap-1.5 text-amber-600 hover:underline dark:text-amber-500"
+      >
+        <AlertTriangle size={11} aria-hidden />
+        Update failed — retry
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => void run()}
+      title={`Download Dermaga ${update.version} and open the installer. Dermaga will close.`}
+      className="flex items-center gap-1.5 font-semibold text-brand-600 hover:underline dark:text-brand-400"
+    >
+      <ArrowDownToLine size={11} aria-hidden />v{update.version} available
+    </button>
   );
 }
 

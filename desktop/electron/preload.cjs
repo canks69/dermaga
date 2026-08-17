@@ -22,6 +22,18 @@ contextBridge.exposeInMainWorld('dermaga', {
   // Returns the chosen path, or null if the dialog was dismissed.
   pickDirectory: (title) => ipcRenderer.invoke('dermaga:pick-directory', title),
 
+  checkUpdate: () => ipcRenderer.invoke('dermaga:check-update'),
+  downloadUpdate: (assetUrl, version) =>
+    ipcRenderer.invoke('dermaga:download-update', assetUrl, version),
+  // Opens the installer and closes Dermaga, so the app can be replaced.
+  installUpdate: (dmgPath) => ipcRenderer.invoke('dermaga:install-update', dmgPath),
+
+  onUpdateProgress: (callback) => {
+    const handler = (_event, value) => callback(value);
+    ipcRenderer.on('dermaga:update-progress', handler);
+    return () => ipcRenderer.removeListener('dermaga:update-progress', handler);
+  },
+
   onFullScreenChange: (callback) => {
     const handler = (_event, value) => callback(Boolean(value));
     ipcRenderer.on('dermaga:fullscreen', handler);
