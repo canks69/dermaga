@@ -184,14 +184,27 @@ func (sm *Manager) LogsCommand(ctx context.Context, last string, follow bool) *e
 	return sm.runner.Command(ctx, args...)
 }
 
+// PruneResult reports what a prune actually achieved, so the UI can say how
+// much was freed rather than claiming success and leaving the same numbers on
+// screen.
+type PruneResult struct {
+	FreedBytes int64    `json:"freedBytes"`
+	Failures   []string `json:"failures,omitempty"`
+}
+
 // Prune reclaims space across every resource type that supports it. Each is
 // best-effort: one failure should not hide the space the others freed.
-func (sm *Manager) Prune(ctx context.Context) []string {
+func (sm *Manager) Prune(ctx context.Context) PruneResult {
+	before := sm.totalBytes(ctx)
+
 	var failures []string
 
 	for _, target := range [][]string{
 		{"prune"},
-		{"image", "prune"},
+		// Without --all this removes only dangling images, while `system df`
+		// counts every image no container uses as reclaimable -- so the button
+		// would promise gigabytes and free nothing.
+		{"image", "prune", "--all"},
 		{"volume", "prune"},
 		{"network", "prune"},
 	} {
@@ -203,5 +216,22 @@ func (sm *Manager) Prune(ctx context.Context) []string {
 
 	sm.changed.Changed()
 
-	return failures
+	freed := before - sm.totalBytes(ctx)
+	if freed < 0 {
+		freed = 0
+	}
+
+	return PruneResult{FreedBytes: freed, Failures: failures}
+}
+
+// totalBytes is everything on disk across the resource types, or 0 if the
+// figure cannot be read -- in which case the caller reports no space freed
+// rather than an invented number.
+func (sm *Manager) totalBytes(ctx context.Context) int64 {
+	usage, err := sm.DiskUsage(ctx)
+	if err != nil {
+		return 0
+	}
+
+	return usage.Containers.SizeInBytes + usage.Images.SizeInBytes + usage.Volumes.SizeInBytes
 }

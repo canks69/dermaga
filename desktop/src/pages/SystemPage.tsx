@@ -38,6 +38,7 @@ export function SystemPage({
   const [pending, setPending] = useState<'start' | 'stop' | 'prune' | null>(null);
   const [installKernel, setInstallKernel] = useState(false);
   const [confirmingStop, setConfirmingStop] = useState(false);
+  const [confirmingPrune, setConfirmingPrune] = useState(false);
   const pushToast = useToastStore((s) => s.push);
 
   const running = status?.running ?? false;
@@ -74,13 +75,15 @@ export function SystemPage({
 
   const run = async (
     action: 'start' | 'stop' | 'prune',
-    work: () => Promise<void>,
+    work: () => Promise<string | void>,
     message: string
   ) => {
     setPending(action);
     try {
-      await work();
-      pushToast(message);
+      // Some actions know better than the caller what happened -- a prune can
+      // free nothing at all, and saying "reclaimed" then is just wrong.
+      const outcome = await work();
+      pushToast(outcome || message);
       onRefresh();
       if (action !== 'stop') void loadUsage();
     } catch (err) {
@@ -212,9 +215,7 @@ export function SystemPage({
                   busy={pending === 'prune'}
                   busyLabel="Reclaiming…"
                   disabled={pending !== null}
-                  onClick={() =>
-                    void run('prune', () => api.pruneSystem(), 'Reclaimed unused resources')
-                  }
+                  onClick={() => setConfirmingPrune(true)}
                 >
                   Reclaim {bytesToLabel(reclaimable)}
                 </Button>
@@ -242,6 +243,28 @@ export function SystemPage({
         <DetailPane>
           <LogPane method="system.logs" params={{ last: '30m' }} />
         </DetailPane>
+      )}
+
+      {confirmingPrune && (
+        <ConfirmDialog
+          title={`Reclaim ${bytesToLabel(reclaimable)}?`}
+          body="Every image no container is using is deleted, along with stopped containers and unused volumes and networks. Images have to be pulled again to use them."
+          confirmLabel="Reclaim"
+          onConfirm={() => {
+            setConfirmingPrune(false);
+            void run(
+              'prune',
+              async () => {
+                const { freedBytes } = await api.pruneSystem();
+                return freedBytes > 0
+                  ? `Reclaimed ${bytesToLabel(freedBytes)}`
+                  : 'Nothing to reclaim — everything on disk is still in use';
+              },
+              'Reclaimed unused resources'
+            );
+          }}
+          onCancel={() => setConfirmingPrune(false)}
+        />
       )}
 
       {confirmingStop && (

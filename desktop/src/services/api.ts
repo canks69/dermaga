@@ -44,8 +44,9 @@ export const api = {
     return invoke('system.diskUsage');
   },
 
-  async pruneSystem(): Promise<void> {
-    await invoke('system.prune');
+  /** Reports what was actually freed, which may be nothing. */
+  async pruneSystem(): Promise<{ freedBytes: number; failures?: string[] }> {
+    return invoke('system.prune');
   },
 
   async getBuild(): Promise<BuildInfo> {

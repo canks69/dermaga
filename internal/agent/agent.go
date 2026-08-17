@@ -172,7 +172,7 @@ func (a *Agent) registerSystem() {
 	})
 
 	a.server.Register("system.prune", func(ctx context.Context, _ json.RawMessage) (any, error) {
-		return map[string]any{"failures": a.system.Prune(ctx)}, nil
+		return a.system.Prune(ctx), nil
 	})
 }
 
