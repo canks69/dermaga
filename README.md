@@ -43,6 +43,11 @@ Download the DMG from [Releases](https://github.com/ryanbekhen/dermaga/releases)
 Dermaga to Applications. The agent is inside the bundle — there is nothing else to install and no
 separate service to run.
 
+> **First open:** macOS will say it *"could not verify Dermaga is free of malware"*. Releases are not
+> yet notarized by Apple, so Gatekeeper blocks them by default. Try to open the app, then go to
+> **System Settings → Privacy & Security** and click **Open Anyway**. You only do this once.
+> (The old right-click → **Open** shortcut no longer works on macOS 15 and later.)
+
 To build it yourself:
 
 ```bash
@@ -220,12 +225,15 @@ APPLE_TEAM_ID=TEAMID \
 make dist
 ```
 
-**Unsigned** — the recipient right-clicks the app and chooses **Open** the first time, or clears the
-quarantine flag:
+**Unsigned** — the recipient has to let it through Gatekeeper themselves: open the app, then
+**System Settings → Privacy & Security → Open Anyway**. Right-click → **Open** stopped working as a
+bypass in macOS 15. From a terminal it is one command:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Dermaga.app
 ```
+
+Notarizing needs paid membership of the Apple Developer Program; nothing else removes the warning.
 
 ### Releasing
 
