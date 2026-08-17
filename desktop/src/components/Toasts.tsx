@@ -1,0 +1,34 @@
+import { CircleCheck, TriangleAlert } from 'lucide-react';
+import { useToastStore } from '../store/toastStore';
+
+export function Toasts() {
+  const toasts = useToastStore((s) => s.toasts);
+  const dismiss = useToastStore((s) => s.dismiss);
+
+  if (toasts.length === 0) return null;
+
+  return (
+    <div
+      className="pointer-events-none fixed bottom-5 right-5 z-50 flex flex-col gap-2"
+      role="status"
+      aria-live="polite"
+    >
+      {toasts.map((toast) => {
+        const Icon = toast.tone === 'error' ? TriangleAlert : CircleCheck;
+
+        return (
+          <button
+            key={toast.id}
+            onClick={() => dismiss(toast.id)}
+            className={`pointer-events-auto flex max-w-sm items-start gap-2.5 rounded-md px-4 py-3 text-left text-sm text-white shadow-panel ${
+              toast.tone === 'error' ? 'bg-orange-700' : 'bg-ink-800'
+            }`}
+          >
+            <Icon size={16} className="mt-0.5 shrink-0" aria-hidden />
+            <span>{toast.message}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}

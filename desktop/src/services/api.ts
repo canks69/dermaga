@@ -1,0 +1,186 @@
+import { invoke } from './ipc';
+import type {
+  BuildInfo,
+  Container,
+  ContainerSpec,
+  DiskUsage,
+  Image,
+  ImageDetail,
+  Machine,
+  MachineSettings,
+  MachineSpec,
+  Network,
+  NetworkSpec,
+  Settings,
+  SystemStatus,
+  ToolchainStatus,
+  Volume,
+  VolumeSpec,
+} from '../types';
+
+/**
+ * Every operation the UI can perform, as JSON-RPC calls on the agent. Streaming
+ * work (logs, pulls, terminals) lives in ./ipc, since it needs the stream id.
+ */
+export const api = {
+  // --- system -------------------------------------------------------------
+
+  async getSystem(): Promise<{ status: SystemStatus; cliAvailable: boolean }> {
+    return invoke('system.status');
+  },
+
+  /** Kernel install is opt-in; without an answer the CLI would prompt. */
+  async startSystem(installKernel = false): Promise<void> {
+    await invoke('system.start', { installKernel });
+  },
+
+  async stopSystem(): Promise<void> {
+    await invoke('system.stop');
+  },
+
+  async getDiskUsage(): Promise<DiskUsage> {
+    return invoke('system.diskUsage');
+  },
+
+  async pruneSystem(): Promise<void> {
+    await invoke('system.prune');
+  },
+
+  async getBuild(): Promise<BuildInfo> {
+    return invoke('app.info');
+  },
+
+  // --- the container CLI itself -------------------------------------------
+
+  async getToolchain(): Promise<ToolchainStatus> {
+    return invoke('toolchain.status');
+  },
+
+  // --- settings -----------------------------------------------------------
+
+  async getSettings(): Promise<{ settings: Settings; path: string }> {
+    return invoke('settings.get');
+  },
+
+  async saveSettings(settings: Settings): Promise<{ settings: Settings; path: string }> {
+    return invoke('settings.save', settings);
+  },
+
+  // --- containers ---------------------------------------------------------
+
+  async getContainers(all = true): Promise<Container[]> {
+    return (await invoke<Container[]>('containers.list', { all })) ?? [];
+  },
+
+  async getContainer(id: string): Promise<Container> {
+    return invoke('containers.get', { id });
+  },
+
+  async getContainerSpec(id: string): Promise<ContainerSpec> {
+    return invoke('containers.spec', { id });
+  },
+
+  async startContainer(id: string): Promise<void> {
+    await invoke('containers.start', { id });
+  },
+
+  async stopContainer(id: string, timeout = 10): Promise<void> {
+    await invoke('containers.stop', { id, timeout });
+  },
+
+  async removeContainer(id: string, force = false): Promise<void> {
+    await invoke('containers.remove', { id, force });
+  },
+
+  /** Applies a new spec by recreating the container; named volumes survive. */
+  async updateContainer(id: string, spec: ContainerSpec): Promise<Container> {
+    return invoke('containers.update', { id, spec });
+  },
+
+  // --- images -------------------------------------------------------------
+
+  async getImages(): Promise<Image[]> {
+    return (await invoke<Image[]>('images.list')) ?? [];
+  },
+
+  async inspectImage(reference: string): Promise<ImageDetail> {
+    return invoke('images.inspect', { reference });
+  },
+
+  async deleteImage(reference: string): Promise<void> {
+    await invoke('images.delete', { reference });
+  },
+
+  async pruneImages(): Promise<void> {
+    await invoke('images.prune');
+  },
+
+  // --- volumes and networks -----------------------------------------------
+
+  async getVolumes(): Promise<Volume[]> {
+    return (await invoke<Volume[]>('volumes.list')) ?? [];
+  },
+
+  async createVolume(spec: VolumeSpec): Promise<void> {
+    await invoke('volumes.create', spec);
+  },
+
+  async deleteVolume(name: string): Promise<void> {
+    await invoke('volumes.delete', { name });
+  },
+
+  async getNetworks(): Promise<Network[]> {
+    return (await invoke<Network[]>('networks.list')) ?? [];
+  },
+
+  async createNetwork(spec: NetworkSpec): Promise<void> {
+    await invoke('networks.create', spec);
+  },
+
+  async deleteNetwork(name: string): Promise<void> {
+    await invoke('networks.delete', { name });
+  },
+
+  // --- machines -----------------------------------------------------------
+
+  async getMachines(): Promise<Machine[]> {
+    return (await invoke<Machine[]>('machines.list')) ?? [];
+  },
+
+  async getMachine(id: string): Promise<Machine> {
+    return invoke('machines.get', { id });
+  },
+
+  async startMachine(id: string): Promise<void> {
+    await invoke('machines.start', { id });
+  },
+
+  async stopMachine(id: string): Promise<void> {
+    await invoke('machines.stop', { id });
+  },
+
+  async deleteMachine(id: string): Promise<void> {
+    await invoke('machines.delete', { id });
+  },
+
+  async setDefaultMachine(id: string): Promise<void> {
+    await invoke('machines.setDefault', { id });
+  },
+
+  async configureMachine(id: string, settings: MachineSettings): Promise<void> {
+    await invoke('machines.configure', { id, settings });
+  },
+};
+
+/** Parameters for the streaming methods, kept beside their callers' types. */
+export const streams = {
+  containerLogs: (id: string, tail: number) =>
+    ['containers.logs', { id, tail, follow: true }] as const,
+  machineLogs: (id: string, tail: number, boot: boolean) =>
+    ['machines.logs', { id, tail, follow: true, boot }] as const,
+  systemLogs: (last = '30m') => ['system.logs', { last, follow: true }] as const,
+  pullImage: (reference: string, platform?: string) =>
+    ['images.pull', { reference, platform }] as const,
+  createMachine: (spec: MachineSpec) => ['machines.create', spec] as const,
+  createContainer: (spec: ContainerSpec) => ['containers.create', spec] as const,
+};

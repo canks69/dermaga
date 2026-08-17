@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Dermaga</title>
+    <style>
+      :root {
+        --surface: #ffffff;
+        --text: #26262c;
+        --muted: #81818b;
+        --line: #e6e6e9;
+        --brand: #ce1126;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --surface: #1a1a1f;
+          --text: #f3f3f4;
+          --muted: #81818b;
+          --line: #2e2e36;
+          --brand: #e2596a;
+        }
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        background: transparent;
+        /* The whole card drags, since there is no title bar to grab. */
+        -webkit-app-region: drag;
+        user-select: none;
+        cursor: default;
+      }
+
+      .card {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        height: 100vh;
+        padding: 26px 28px;
+        border-radius: 14px;
+        background: var(--surface);
+        color: var(--text);
+        box-shadow: 0 18px 50px rgb(0 0 0 / 0.22);
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      header img {
+        width: 38px;
+        height: 38px;
+        object-fit: contain;
+      }
+
+      h1 {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+
+      header p {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 1px;
+      }
+
+      ol {
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+        list-style: none;
+        font-size: 12px;
+      }
+
+      li {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        color: var(--muted);
+        transition: color 160ms ease;
+      }
+
+      li[data-state='active'],
+      li[data-state='done'] {
+        color: var(--text);
+      }
+
+      li[data-state='failed'] {
+        color: var(--brand);
+      }
+
+      /* One 14px slot for every state, so nothing shifts as steps complete. */
+      .mark {
+        position: relative;
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+
+      .mark::before {
+        content: '';
+        position: absolute;
+        inset: 4px;
+        border-radius: 50%;
+        background: var(--line);
+      }
+
+      li[data-state='active'] .mark::before {
+        inset: 0;
+        border-radius: 50%;
+        background: none;
+        border: 2px solid var(--line);
+        border-top-color: var(--brand);
+        animation: spin 620ms linear infinite;
+      }
+
+      li[data-state='done'] .mark::before,
+      li[data-state='failed'] .mark::before {
+        inset: 3px;
+        background: var(--brand);
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .track {
+        height: 3px;
+        border-radius: 999px;
+        background: var(--line);
+        overflow: hidden;
+      }
+
+      .fatal {
+        display: none;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .fatal h2 {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--brand);
+      }
+
+      .fatal p {
+        font-size: 11px;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+
+      .fatal button {
+        -webkit-app-region: no-drag;
+        align-self: flex-start;
+        padding: 5px 12px;
+        border: 0;
+        border-radius: 999px;
+        background: var(--brand);
+        color: #fff;
+        font: inherit;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      body[data-fatal='true'] ol,
+      body[data-fatal='true'] .track {
+        display: none;
+      }
+
+      body[data-fatal='true'] .fatal {
+        display: flex;
+      }
+
+      .track span {
+        display: block;
+        height: 100%;
+        width: 0;
+        border-radius: 999px;
+        background: var(--brand);
+        transition: width 320ms ease;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <header>
+        <img src="./splash-logo.png" alt="" />
+        <div>
+          <h1>Dermaga</h1>
+          <p>A harbour for your containers</p>
+        </div>
+      </header>
+
+      <ol id="steps"></ol>
+
+      <div class="track"><span id="bar"></span></div>
+
+      <div class="fatal">
+        <div>
+          <h2 id="fatal-title"></h2>
+          <p id="fatal-detail"></p>
+        </div>
+        <button id="quit" type="button">Quit Dermaga</button>
+      </div>
+    </div>
+
+    <script>
+      const STEPS = [
+        ['agent', 'Starting the agent'],
+        ['brew', 'Checking Homebrew'],
+        ['cli', 'Checking the container CLI'],
+        ['services', 'Checking container services'],
+        ['ui', 'Loading your containers'],
+      ];
+
+      const list = document.getElementById('steps');
+      const bar = document.getElementById('bar');
+      const nodes = new Map();
+
+      for (const [id, label] of STEPS) {
+        const item = document.createElement('li');
+        item.dataset.state = 'pending';
+        item.innerHTML = '<span class="mark"></span><span class="label"></span>';
+        item.querySelector('.label').textContent = label;
+        list.append(item);
+        nodes.set(id, item);
+      }
+
+      document.getElementById('quit').addEventListener('click', () => window.splash?.quit());
+
+      window.splash?.onFatal(({ title, detail }) => {
+        document.body.dataset.fatal = 'true';
+        document.getElementById('fatal-title').textContent = title;
+        document.getElementById('fatal-detail').textContent = detail;
+      });
+
+      window.splash?.onStep(({ id, state, label }) => {
+        const item = nodes.get(id);
+        if (!item) return;
+
+        item.dataset.state = state;
+        if (label) item.querySelector('.label').textContent = label;
+
+        const done = [...nodes.values()].filter((n) => n.dataset.state === 'done').length;
+        bar.style.width = `${(done / STEPS.length) * 100}%`;
+      });
+    </script>
+  </body>
+</html>

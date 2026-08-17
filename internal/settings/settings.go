@@ -1,0 +1,134 @@
+package settings
+
+import (
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"sync"
+)
+
+// Settings are the user's preferences. They live in the home directory rather
+// than in browser storage so they survive a reinstall, can be edited by hand,
+// and are shared by every Dermaga window on the machine.
+type Settings struct {
+	Theme              string `json:"theme"`
+	ShowStopped        bool   `json:"showStopped"`
+	LogTail            int    `json:"logTail"`
+	ConfirmDestructive bool   `json:"confirmDestructive"`
+	SidebarCollapsed   bool   `json:"sidebarCollapsed"`
+}
+
+func Defaults() Settings {
+	return Settings{
+		Theme:              "system",
+		ShowStopped:        true,
+		LogTail:            200,
+		ConfirmDestructive: true,
+	}
+}
+
+// normalize repairs anything a hand-edited file (or an old version) got wrong,
+// so a bad value degrades to the default instead of breaking the UI.
+func (s Settings) normalize() Settings {
+	switch s.Theme {
+	case "light", "dark", "system":
+	default:
+		s.Theme = "system"
+	}
+
+	if s.LogTail < 10 {
+		s.LogTail = 10
+	}
+	if s.LogTail > 5000 {
+		s.LogTail = 5000
+	}
+
+	return s
+}
+
+type Store struct {
+	logger *slog.Logger
+	path   string
+	mu     sync.RWMutex
+}
+
+// NewSettingsStore resolves ~/.dermaga/config.json. If the home directory
+// cannot be determined the store still works, it just never persists.
+func NewStore(logger *slog.Logger) *Store {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		logger.Warn("Could not resolve home directory; settings will not persist", "error", err)
+		return &Store{logger: logger}
+	}
+
+	return &Store{
+		logger: logger,
+		path:   filepath.Join(home, ".dermaga", "config.json"),
+	}
+}
+
+func (s *Store) Path() string {
+	return s.path
+}
+
+func (s *Store) Load() Settings {
+	if s.path == "" {
+		return Defaults()
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	raw, err := os.ReadFile(s.path)
+	if err != nil {
+		// A missing file is the normal first run, not a problem worth logging.
+		if !os.IsNotExist(err) {
+			s.logger.Warn("Could not read settings", "path", s.path, "error", err)
+		}
+		return Defaults()
+	}
+
+	// Start from the defaults so a partial file keeps sensible values.
+	settings := Defaults()
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		s.logger.Warn("Settings file is not valid JSON; using defaults", "path", s.path, "error", err)
+		return Defaults()
+	}
+
+	return settings.normalize()
+}
+
+func (s *Store) Save(settings Settings) (Settings, error) {
+	settings = settings.normalize()
+
+	if s.path == "" {
+		return settings, nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+		return settings, fmt.Errorf("could not create %s: %w", filepath.Dir(s.path), err)
+	}
+
+	encoded, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return settings, err
+	}
+	encoded = append(encoded, '\n')
+
+	// Write-then-rename so a crash mid-write cannot truncate the config.
+	temp := s.path + ".tmp"
+	if err := os.WriteFile(temp, encoded, 0o644); err != nil {
+		return settings, fmt.Errorf("could not write %s: %w", temp, err)
+	}
+	if err := os.Rename(temp, s.path); err != nil {
+		_ = os.Remove(temp)
+		return settings, fmt.Errorf("could not save %s: %w", s.path, err)
+	}
+
+	return settings, nil
+}

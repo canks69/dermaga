@@ -1,0 +1,156 @@
+package containers
+
+import "testing"
+
+// Trimmed from real `container list --all --format json` output (CLI 1.2.2).
+const listFixture = `[
+  {
+    "configuration": {
+      "creationDate": "2026-08-17T07:12:13Z",
+      "id": "postgres",
+      "image": {"reference": "docker.io/library/postgres:18.6"},
+      "initProcess": {"environment": ["POSTGRES_USER=postgres"]},
+      "labels": {"app": "db"},
+      "mounts": [
+        {
+          "destination": "/var/lib/postgresql",
+          "options": [],
+          "source": "/Users/me/Library/Application Support/com.apple.container/volumes/postgres-data/volume.img",
+          "type": {"volume": {"format": "ext4", "name": "postgres-data"}}
+        },
+        {
+          "destination": "/etc/conf",
+          "options": ["ro"],
+          "source": "/Users/me/conf",
+          "type": {"virtiofs": {}}
+        }
+      ],
+      "networks": [{"network": "default", "options": {"hostname": "postgres", "mtu": 1280}}],
+      "publishedPorts": [{"containerPort": 5432, "count": 1, "hostAddress": "0.0.0.0", "hostPort": 5432, "proto": "tcp"}],
+      "resources": {"cpuOverhead": 1, "cpus": 2, "memoryInBytes": 2147483648}
+    },
+    "id": "postgres",
+    "status": {"startedDate": "2026-08-17T07:12:14Z", "state": "running"}
+  },
+  {
+    "configuration": {
+      "creationDate": "2026-08-16T19:11:09Z",
+      "id": "worker",
+      "image": {"reference": "docker.io/library/alpine:3.20"},
+      "labels": {},
+      "mounts": [],
+      "networks": [],
+      "publishedPorts": [],
+      "resources": {"cpus": 1, "memoryInBytes": 536870912}
+    },
+    "id": "worker",
+    "status": {"state": "stopped"}
+  }
+]`
+
+func TestParseContainerList(t *testing.T) {
+	containers, err := parseContainerList([]byte(listFixture))
+	if err != nil {
+		t.Fatalf("parseContainerList: %v", err)
+	}
+
+	if len(containers) != 2 {
+		t.Fatalf("got %d containers, want 2", len(containers))
+	}
+
+	pg := containers[0]
+	if pg.ID != "postgres" || pg.Name != "postgres" {
+		t.Errorf("id/name = %q/%q", pg.ID, pg.Name)
+	}
+	if pg.Image != "docker.io/library/postgres:18.6" {
+		t.Errorf("image = %q", pg.Image)
+	}
+	if pg.Status != "running" || pg.State != "running" {
+		t.Errorf("status/state = %q/%q", pg.Status, pg.State)
+	}
+	if pg.CreatedAt != "2026-08-17T07:12:13Z" || pg.StartedAt != "2026-08-17T07:12:14Z" {
+		t.Errorf("timestamps = %q/%q", pg.CreatedAt, pg.StartedAt)
+	}
+	if pg.CPUAllocation != 2 || pg.MemoryAllocation != "2048m" {
+		t.Errorf("resources = %d/%q", pg.CPUAllocation, pg.MemoryAllocation)
+	}
+	if pg.Labels["app"] != "db" {
+		t.Errorf("labels = %v", pg.Labels)
+	}
+	if len(pg.EnvironmentVars) != 1 || pg.EnvironmentVars[0] != "POSTGRES_USER=postgres" {
+		t.Errorf("env = %v", pg.EnvironmentVars)
+	}
+
+	if len(pg.Ports) != 1 {
+		t.Fatalf("got %d ports, want 1", len(pg.Ports))
+	}
+	if pg.Ports[0] != (Port{Host: "5432", Container: "5432", Protocol: "tcp"}) {
+		t.Errorf("port = %+v", pg.Ports[0])
+	}
+
+	if len(pg.Mounts) != 2 {
+		t.Fatalf("got %d mounts, want 2", len(pg.Mounts))
+	}
+	// A volume mount surfaces its volume name, not the backing image path.
+	want := Mount{Source: "postgres-data", Destination: "/var/lib/postgresql", Type: "volume"}
+	if pg.Mounts[0] != want {
+		t.Errorf("volume mount = %+v, want %+v", pg.Mounts[0], want)
+	}
+	if !pg.Mounts[1].ReadOnly || pg.Mounts[1].Source != "/Users/me/conf" {
+		t.Errorf("bind mount = %+v", pg.Mounts[1])
+	}
+
+	worker := containers[1]
+	if worker.Status != "stopped" {
+		t.Errorf("worker status = %q", worker.Status)
+	}
+	if worker.StartedAt != "" {
+		t.Errorf("stopped container has startedAt = %q", worker.StartedAt)
+	}
+	// A container with no network still needs a usable name.
+	if worker.Name != "worker" {
+		t.Errorf("worker name = %q", worker.Name)
+	}
+	// JSON encoding relies on these being non-nil so the UI never sees null.
+	if worker.Ports == nil || worker.Mounts == nil || worker.Labels == nil {
+		t.Errorf("nil slices/maps on %+v", worker)
+	}
+}
+
+func TestParseContainerListEmpty(t *testing.T) {
+	containers, err := parseContainerList([]byte(`[]`))
+	if err != nil {
+		t.Fatalf("parseContainerList: %v", err)
+	}
+	if len(containers) != 0 {
+		t.Fatalf("got %d containers, want 0", len(containers))
+	}
+}
+
+func TestFormatMebibytes(t *testing.T) {
+	cases := map[int64]string{
+		2147483648: "2048m",
+		536870912:  "512m",
+		0:          "",
+		-1:         "",
+	}
+
+	for in, want := range cases {
+		if got := formatMebibytes(in); got != want {
+			t.Errorf("formatMebibytes(%d) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestParseLogsLine(t *testing.T) {
+	entry := ParseLogsLine("2026-08-17T14:22:15Z PostgreSQL started")
+	if entry["timestamp"] != "2026-08-17T14:22:15Z" || entry["message"] != "PostgreSQL started" {
+		t.Errorf("timestamped line = %v", entry)
+	}
+
+	// Lines without a leading timestamp keep their first word.
+	entry = ParseLogsLine("LOG:  database system is ready")
+	if entry["timestamp"] != "" || entry["message"] != "LOG:  database system is ready" {
+		t.Errorf("plain line = %v", entry)
+	}
+}

@@ -1,0 +1,44 @@
+# --- Go -----------------------------------------------------------------
+/bin/
+*.test
+*.out
+
+# --- Node ---------------------------------------------------------------
+node_modules/
+.npm/
+*.tsbuildinfo
+
+# --- Build output -------------------------------------------------------
+desktop/dist/
+desktop/release/
+desktop/.vite/
+coverage/
+
+# Generated from assets/logo.png by `make icon`; the logo itself is tracked.
+desktop/build/icon.png
+desktop/electron/splash-logo.png
+
+# --- Local configuration and secrets ------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.mobileprovision
+
+# --- Logs ---------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# --- Editors ------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*~
+
+# --- macOS --------------------------------------------------------------
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes

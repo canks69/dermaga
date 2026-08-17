@@ -1,0 +1,397 @@
+import { useState } from 'react';
+import { api } from '../services/api';
+import { useResourceStore } from '../store/resourceStore';
+import { useToastStore } from '../store/toastStore';
+import type { ContainerSpec } from '../types';
+import { Checkbox, Field, Fieldset, Modal, Row } from './form';
+import { runTask } from './TaskRows';
+import { useTaskStore } from '../store/taskStore';
+
+interface ContainerFormProps {
+  /** Present when editing; absent when creating. */
+  editing?: string;
+  initial?: ContainerSpec;
+  onClose: () => void;
+}
+
+interface Pair {
+  key: string;
+  value: string;
+}
+
+const EMPTY: ContainerSpec = {
+  name: '',
+  image: '',
+  cpus: 1,
+  memory: '512m',
+  env: [],
+  ports: [],
+  mounts: [],
+};
+
+export function ContainerForm({ editing, initial, onClose }: ContainerFormProps) {
+  const images = useResourceStore((s) => s.images);
+  const volumes = useResourceStore((s) => s.volumes);
+  const networks = useResourceStore((s) => s.networks);
+  const pushToast = useToastStore((s) => s.push);
+
+  const base = initial ?? EMPTY;
+  const [name, setName] = useState(base.name ?? '');
+  const [image, setImage] = useState(base.image ?? '');
+  const [entrypoint, setEntrypoint] = useState(base.entrypoint ?? '');
+  const [command, setCommand] = useState((base.command ?? []).join(' '));
+  const [cpus, setCpus] = useState(base.cpus ?? 1);
+  const [memory, setMemory] = useState(base.memory ?? '512m');
+  const [network, setNetwork] = useState(base.network ?? '');
+  const [workdir, setWorkdir] = useState(base.workdir ?? '');
+  const [user, setUser] = useState(base.user ?? '');
+  const [readOnly, setReadOnly] = useState(base.readOnly ?? false);
+  const [init, setInit] = useState(base.init ?? false);
+  const [removeOnExit, setRemoveOnExit] = useState(base.removeOnExit ?? false);
+
+  const [env, setEnv] = useState<Pair[]>(
+    (base.env ?? []).map((entry) => {
+      const index = entry.indexOf('=');
+      return index === -1
+        ? { key: entry, value: '' }
+        : { key: entry.slice(0, index), value: entry.slice(index + 1) };
+    })
+  );
+  const [ports, setPorts] = useState(
+    (base.ports ?? []).map((p) => ({ host: p.host, container: p.container, protocol: p.protocol }))
+  );
+  const [mounts, setMounts] = useState(
+    (base.mounts ?? []).map((m) => ({
+      type: m.type || 'volume',
+      source: m.source,
+      target: m.target,
+      readOnly: m.readOnly ?? false,
+    }))
+  );
+
+  const startTask = useTaskStore((s) => s.start);
+  const failTask = useTaskStore((s) => s.fail);
+  const finishTask = useTaskStore((s) => s.finish);
+
+  const buildSpec = (): ContainerSpec => ({
+    name: name.trim(),
+    image: image.trim(),
+    entrypoint: entrypoint.trim() || undefined,
+    // Quoting is deliberately not supported here: anything that needs a shell
+    // belongs in an entrypoint, not in a text box.
+    command: command.trim() ? command.trim().split(/\s+/) : undefined,
+    env: env.filter((e) => e.key.trim()).map((e) => `${e.key.trim()}=${e.value}`),
+    ports: ports.filter((p) => p.host && p.container),
+    mounts: mounts.filter((m) => m.source && m.target),
+    cpus: Number(cpus) || undefined,
+    memory: memory.trim() || undefined,
+    network: network || undefined,
+    workdir: workdir.trim() || undefined,
+    user: user.trim() || undefined,
+    readOnly,
+    init,
+    removeOnExit,
+    labels: base.labels,
+  });
+
+  // The dialog closes immediately and the work reports itself in the list, so
+  // a slow image pull does not hold a modal open.
+  const submit = () => {
+    const spec = buildSpec();
+    const label = spec.name || spec.image;
+    const id = `container:${label}`;
+
+    onClose();
+
+    if (!editing) {
+      // `container run` reports its own steps -- fetching, unpacking, starting
+      // -- so the row shows real progress rather than an endless spinner.
+      void runTask({
+        id,
+        kind: 'container',
+        label,
+        method: 'containers.create',
+        params: spec,
+        onDone: (failed) => {
+          if (!failed) pushToast(`Created ${label}`);
+        },
+      });
+      return;
+    }
+
+    startTask({ id, kind: 'container', label, step: 'Recreating…' });
+
+    void (async () => {
+      try {
+        await api.updateContainer(editing, spec);
+        pushToast(`Recreated ${spec.name || editing}`);
+        finishTask(id);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Could not save the container';
+        failTask(id, message);
+        pushToast(message, 'error');
+      }
+    })();
+  };
+
+  return (
+    <Modal
+      wide
+      title={editing ? `Edit ${editing}` : 'New container'}
+      subtitle={
+        editing
+          ? 'Apple’s CLI has no update command, so saving stops and recreates this container. Named volumes survive; anything written to the container filesystem does not.'
+          : 'Runs `container run --detach` with these settings.'
+      }
+      onClose={onClose}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-ghost">
+            Cancel
+          </button>
+          <button onClick={submit} className="btn-primary" disabled={!image.trim()}>
+            {editing ? 'Recreate' : 'Create'}
+          </button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="Name" hint="Left blank, the CLI generates one.">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="my-service"
+            className="input"
+          />
+        </Field>
+
+        <Field label="Image" hint="Pick a local image or type any reference.">
+          <input
+            value={image}
+            onChange={(e) => setImage(e.target.value)}
+            list="dermaga-images"
+            placeholder="docker.io/library/redis:8.10"
+            className="input"
+          />
+          <datalist id="dermaga-images">
+            {images.map((img) => (
+              <option key={img.reference} value={img.reference} />
+            ))}
+          </datalist>
+        </Field>
+
+        <Field label="CPUs">
+          <input
+            type="number"
+            min={1}
+            max={64}
+            value={cpus}
+            onChange={(e) => setCpus(Number(e.target.value))}
+            className="input"
+          />
+        </Field>
+
+        <Field label="Memory" hint="Accepts K, M, G suffixes.">
+          <input
+            value={memory}
+            onChange={(e) => setMemory(e.target.value)}
+            placeholder="512m"
+            className="input"
+          />
+        </Field>
+
+        <Field label="Network">
+          <select
+            value={network}
+            onChange={(e) => setNetwork(e.target.value)}
+            className="input appearance-none"
+          >
+            <option value="">default</option>
+            {networks.map((n) => (
+              <option key={n.name} value={n.name}>
+                {n.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Working directory">
+          <input
+            value={workdir}
+            onChange={(e) => setWorkdir(e.target.value)}
+            placeholder="/app"
+            className="input"
+          />
+        </Field>
+
+        <Field label="Entrypoint" hint="Overrides the image entrypoint.">
+          <input
+            value={entrypoint}
+            onChange={(e) => setEntrypoint(e.target.value)}
+            placeholder="docker-entrypoint.sh"
+            className="input"
+          />
+        </Field>
+
+        <Field label="Command" hint="Arguments passed to the entrypoint.">
+          <input
+            value={command}
+            onChange={(e) => setCommand(e.target.value)}
+            placeholder="redis-server --appendonly yes"
+            className="input"
+          />
+        </Field>
+
+        <Field label="User" hint="name, uid, or uid:gid.">
+          <input
+            value={user}
+            onChange={(e) => setUser(e.target.value)}
+            placeholder="1000:1000"
+            className="input"
+          />
+        </Field>
+
+        <div className="flex flex-col justify-end gap-2 pb-1">
+          <Checkbox checked={init} onChange={setInit} label="Run an init process" />
+          <Checkbox checked={readOnly} onChange={setReadOnly} label="Read-only root filesystem" />
+          <Checkbox
+            checked={removeOnExit}
+            onChange={setRemoveOnExit}
+            label="Remove when it stops"
+          />
+        </div>
+      </div>
+
+      <Fieldset
+        legend="Ports"
+        addLabel="Add port"
+        onAdd={() => setPorts([...ports, { host: '', container: '', protocol: 'tcp' }])}
+      >
+        {ports.map((port, index) => (
+          <Row key={index} onRemove={() => setPorts(ports.filter((_, i) => i !== index))}>
+            <input
+              value={port.host}
+              onChange={(e) =>
+                setPorts(ports.map((p, i) => (i === index ? { ...p, host: e.target.value } : p)))
+              }
+              placeholder="host"
+              className="input w-full"
+            />
+            <span className="text-xs text-ink-500">→</span>
+            <input
+              value={port.container}
+              onChange={(e) =>
+                setPorts(
+                  ports.map((p, i) => (i === index ? { ...p, container: e.target.value } : p))
+                )
+              }
+              placeholder="container"
+              className="input w-full"
+            />
+            <select
+              value={port.protocol}
+              onChange={(e) =>
+                setPorts(
+                  ports.map((p, i) => (i === index ? { ...p, protocol: e.target.value } : p))
+                )
+              }
+              className="input w-24 appearance-none"
+            >
+              <option value="tcp">tcp</option>
+              <option value="udp">udp</option>
+            </select>
+          </Row>
+        ))}
+      </Fieldset>
+
+      <Fieldset
+        legend="Mounts"
+        addLabel="Add mount"
+        onAdd={() =>
+          setMounts([...mounts, { type: 'volume', source: '', target: '', readOnly: false }])
+        }
+      >
+        {mounts.map((mount, index) => (
+          <Row key={index} onRemove={() => setMounts(mounts.filter((_, i) => i !== index))}>
+            <select
+              value={mount.type}
+              onChange={(e) =>
+                setMounts(mounts.map((m, i) => (i === index ? { ...m, type: e.target.value } : m)))
+              }
+              className="input w-28 appearance-none"
+            >
+              <option value="volume">volume</option>
+              <option value="bind">bind</option>
+            </select>
+            <input
+              value={mount.source}
+              onChange={(e) =>
+                setMounts(
+                  mounts.map((m, i) => (i === index ? { ...m, source: e.target.value } : m))
+                )
+              }
+              list={mount.type === 'volume' ? 'dermaga-volumes' : undefined}
+              placeholder={mount.type === 'volume' ? 'volume name' : '/host/path'}
+              className="input w-full"
+            />
+            <span className="text-xs text-ink-500">→</span>
+            <input
+              value={mount.target}
+              onChange={(e) =>
+                setMounts(
+                  mounts.map((m, i) => (i === index ? { ...m, target: e.target.value } : m))
+                )
+              }
+              placeholder="/container/path"
+              className="input w-full"
+            />
+            <Checkbox
+              checked={mount.readOnly}
+              onChange={(value) =>
+                setMounts(mounts.map((m, i) => (i === index ? { ...m, readOnly: value } : m)))
+              }
+              label="ro"
+            />
+          </Row>
+        ))}
+        <datalist id="dermaga-volumes">
+          {volumes.map((v) => (
+            <option key={v.name} value={v.name} />
+          ))}
+        </datalist>
+      </Fieldset>
+
+      <Fieldset
+        legend="Environment"
+        hint={
+          editing
+            ? 'Values inherited from the image are listed too; they will be set explicitly on recreate.'
+            : undefined
+        }
+        addLabel="Add variable"
+        onAdd={() => setEnv([...env, { key: '', value: '' }])}
+      >
+        {env.map((entry, index) => (
+          <Row key={index} onRemove={() => setEnv(env.filter((_, i) => i !== index))}>
+            <input
+              value={entry.key}
+              onChange={(e) =>
+                setEnv(env.map((v, i) => (i === index ? { ...v, key: e.target.value } : v)))
+              }
+              placeholder="KEY"
+              className="input w-1/3 font-mono text-xs"
+            />
+            <input
+              value={entry.value}
+              onChange={(e) =>
+                setEnv(env.map((v, i) => (i === index ? { ...v, value: e.target.value } : v)))
+              }
+              placeholder="value"
+              className="input w-full font-mono text-xs"
+            />
+          </Row>
+        ))}
+      </Fieldset>
+    </Modal>
+  );
+}

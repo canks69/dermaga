@@ -1,0 +1,132 @@
+@import 'tailwindcss';
+
+/* The palette and design tokens still live in the JS config, which v4 reads
+   through this directive. */
+@config '../tailwind.config.js';
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    font-family: theme('fontFamily.sans');
+    -webkit-font-smoothing: antialiased;
+    @apply bg-white text-ink-800 dark:bg-ink-950 dark:text-ink-100;
+  }
+
+  /* Nothing in the chrome should be text-selectable like a document; log and
+     detail values opt back in. */
+  body {
+    user-select: none;
+    cursor: default;
+  }
+
+  input {
+    user-select: text;
+  }
+
+  /* Electron window dragging: chrome moves the window, controls do not. */
+  .drag {
+    -webkit-app-region: drag;
+  }
+
+  .no-drag,
+  button,
+  input,
+  select,
+  a {
+    -webkit-app-region: no-drag;
+  }
+
+  /* Overlay scrollbars, the way a native list scrolls. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full border-[3px] border-solid border-transparent bg-clip-padding;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-ink-300 dark:bg-ink-700;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-ink-400 dark:bg-ink-600;
+  }
+
+  :focus-visible {
+    @apply outline-hidden ring-2 ring-brand-600/40;
+  }
+}
+
+/* Declared as utilities, not components: Tailwind 4 only lets @apply reference
+   utilities, and .card-interactive / .btn-* are built on these. */
+/* Opts an element back into text selection inside the non-selectable chrome. */
+@utility selectable {
+  user-select: text;
+}
+
+@utility card {
+    @apply rounded-lg border border-ink-200 bg-white p-3 transition-colors dark:border-ink-700 dark:bg-ink-900;
+}
+
+@utility btn {
+    @apply inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+@layer components {
+  .card-interactive {
+    @apply card cursor-pointer hover:border-brand-600 hover:shadow-md;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-700;
+  }
+
+  .btn-secondary {
+    @apply btn bg-orange-600 text-white hover:bg-orange-700;
+  }
+
+  .btn-ghost {
+    @apply btn border border-ink-300 bg-transparent text-ink-700 hover:bg-ink-100 dark:border-ink-700 dark:text-ink-200 dark:hover:bg-ink-800;
+  }
+
+  .btn-icon {
+    @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-ink-300 transition-colors hover:bg-ink-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-ink-700 dark:hover:bg-ink-800;
+  }
+
+  .input {
+    @apply h-7 rounded-md border border-ink-300 bg-ink-50 px-2.5 text-xs text-ink-800 transition-colors placeholder:text-ink-500 focus:border-brand-600 focus:outline-hidden focus:ring-2 focus:ring-brand-600/20 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100;
+  }
+
+  .label-caps {
+    @apply text-tiny font-semibold uppercase tracking-wide text-ink-600 dark:text-ink-400;
+  }
+
+  .row {
+    @apply flex items-baseline justify-between gap-3 text-sm;
+  }
+
+  .row-key {
+    @apply shrink-0 text-ink-600 dark:text-ink-400;
+  }
+
+  .row-value {
+    @apply selectable truncate text-right font-normal text-ink-800 dark:text-ink-100;
+  }
+}
