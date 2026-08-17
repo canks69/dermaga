@@ -93,7 +93,8 @@ release:
 	@git rev-parse "v$(VERSION)" >/dev/null 2>&1 && { echo "tag v$(VERSION) already exists"; exit 1; } || true
 	$(MAKE) check
 	cd desktop && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null
-	git add desktop/package.json
+	@# npm stamps the version into the lockfile too, so both have to go in.
+	git add desktop/package.json desktop/package-lock.json
 	@# package.json can already be at this version -- tag the current commit then.
 	@git diff --cached --quiet || git commit -m "release: v$(VERSION)"
 	git tag -a "v$(VERSION)" -m "Dermaga v$(VERSION)"
