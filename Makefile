@@ -14,7 +14,7 @@ DMG     := desktop/release/Dermaga-$(VERSION)-arm64.dmg
 AGENT   := bin/dermaga-agent
 LDFLAGS := -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildDate=$(DATE)
 
-.PHONY: all agent icon desktop-deps dev check test lint fmt dist verify-dist install release version clean
+.PHONY: all agent icon desktop-deps dev check test lint fmt dist verify-dist install release publish version clean
 
 all: agent
 
@@ -100,9 +100,23 @@ release:
 	git push origin HEAD
 	git push origin "v$(VERSION)"
 	$(MAKE) VERSION=$(VERSION) dist
-	gh release create "v$(VERSION)" "$(DMG)" \
-		--title "Dermaga v$(VERSION)" \
-		--generate-notes
+	$(MAKE) VERSION=$(VERSION) publish
+
+## Publish an already-tagged, already-built version to GitHub. Split out of
+## `release` so a failure at the last step -- a GitHub outage, an expired
+## token -- can be retried on its own, without re-tagging or rebuilding.
+publish:
+	@git rev-parse "v$(VERSION)" >/dev/null 2>&1 || { echo "no tag v$(VERSION); run: make release VERSION=$(VERSION)"; exit 1; }
+	@test -f "$(DMG)" || { echo "no DMG for $(VERSION); run: make VERSION=$(VERSION) dist"; exit 1; }
+	@git push origin "v$(VERSION)" 2>/dev/null || true
+	@if gh release view "v$(VERSION)" >/dev/null 2>&1; then \
+		echo "release v$(VERSION) exists; uploading the DMG"; \
+		gh release upload "v$(VERSION)" "$(DMG)" --clobber; \
+	else \
+		gh release create "v$(VERSION)" "$(DMG)" \
+			--title "Dermaga v$(VERSION)" \
+			--generate-notes; \
+	fi
 	@echo "released: v$(VERSION)"
 
 ## What this build reports about itself.
