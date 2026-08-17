@@ -14,7 +14,9 @@ export function CreateMachineDialog({ onClose }: { onClose: () => void }) {
   const images = useResourceStore((s) => s.images);
 
   const [name, setName] = useState('');
-  const [image, setImage] = useState('ubuntu:26.04');
+  // Alpine boots in seconds and is a fraction of the download; it is also what
+  // the CLI's own help suggests.
+  const [image, setImage] = useState('alpine:3.22');
   const [cpus, setCpus] = useState(2);
   const [memory, setMemory] = useState('2G');
   const [homeMount, setHomeMount] = useState('rw');
@@ -62,7 +64,7 @@ export function CreateMachineDialog({ onClose }: { onClose: () => void }) {
       }
     >
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Image" hint="For example ubuntu:26.04 or alpine:3.22.">
+        <Field label="Image" hint="For example alpine:3.22 or ubuntu:26.04.">
           <input
             value={image}
             onChange={(e) => setImage(e.target.value)}
