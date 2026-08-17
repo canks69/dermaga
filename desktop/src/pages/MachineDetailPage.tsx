@@ -168,6 +168,11 @@ export function MachineDetailPage({ machine, tab }: { machine: Machine; tab: Mac
           <LogPane
             method="machines.logs"
             params={{ id: machine.id, tail: logTail, boot: bootLog }}
+            missingHint={
+              bootLog
+                ? 'This machine has not booted yet, so there is no boot log to show. Start it and the log will appear here.'
+                : 'A machine only writes this log while it is running. Start the machine, or switch to the boot log, to see output.'
+            }
             controls={
               <label className="flex items-center gap-2 text-xs text-ink-600 dark:text-ink-400">
                 <input

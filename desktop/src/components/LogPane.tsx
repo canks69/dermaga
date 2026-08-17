@@ -9,15 +9,23 @@ const STATUS_LABEL: Record<StreamStatus, string> = {
   error: 'disconnected',
 };
 
+// The runtime writes no log file until the thing has run at least once, and it
+// reports that as a hard error rather than as empty output. Printed raw --
+// NSCocoaErrorDomain, a file path, a nested NSUnderlyingError -- it reads like a
+// crash, so recognise it and explain it instead.
+const NO_LOG_FILE = /failed to (get|open).{0,40}logs?|stdio\.log/i;
+
 interface LogPaneProps {
   /** JSON-RPC method that opens the stream, e.g. containers.logs. */
   method: string;
   params: unknown;
   /** Extra controls rendered next to the filter, e.g. a boot-log switch. */
   controls?: React.ReactNode;
+  /** Explains why there is no log file yet, when the runtime says there isn't. */
+  missingHint?: React.ReactNode;
 }
 
-export function LogPane({ method, params, controls }: LogPaneProps) {
+export function LogPane({ method, params, controls, missingHint }: LogPaneProps) {
   const { entries, status } = useLogStream(method, params);
 
   const [filter, setFilter] = useState('');
@@ -29,6 +37,11 @@ export function LogPane({ method, params, controls }: LogPaneProps) {
     const needle = filter.toLowerCase();
     return entries.filter((entry) => entry.message.toLowerCase().includes(needle));
   }, [entries, filter]);
+
+  const noLogFile = useMemo(
+    () => entries.length > 0 && entries.every((entry) => NO_LOG_FILE.test(entry.message)),
+    [entries]
+  );
 
   useEffect(() => {
     if (!autoScroll) return;
@@ -77,7 +90,14 @@ export function LogPane({ method, params, controls }: LogPaneProps) {
         onScroll={onScroll}
         className="selectable -mr-5 min-h-0 flex-1 overflow-auto py-2 pr-5 font-mono text-xs leading-relaxed"
       >
-        {visible.length === 0 ? (
+        {noLogFile ? (
+          <div className="max-w-prose font-sans text-sm text-ink-500">
+            <p className="text-ink-700 dark:text-ink-300">No logs yet.</p>
+            <p className="mt-1">
+              {missingHint ?? 'Nothing has been written here yet — there is no log file to read.'}
+            </p>
+          </div>
+        ) : visible.length === 0 ? (
           <p className="text-ink-500">
             {entries.length === 0 ? 'Waiting for output…' : 'No lines match the filter.'}
           </p>
