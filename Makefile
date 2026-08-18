@@ -78,7 +78,8 @@ verify-dist:
 	test -f "$$app/Contents/Resources/icon.icns" || { echo "FAIL: icon missing"; exit 1; }; \
 	test -f "$$app/Contents/Resources/app.asar" || { echo "FAIL: app.asar missing"; exit 1; }; \
 	codesign --verify --deep "$$app" || { echo "FAIL: signature does not verify"; exit 1; }; \
-	echo "verify-dist: agent, icon, asar and signature all present"
+	sh scripts/check-inline-scripts.sh "$$app" || exit 1; \
+	echo "verify-dist: agent, icon, asar, signature and no inline scripts"
 
 ## Install the built app locally, clearing the quarantine flag that Gatekeeper
 ## sets on anything downloaded.

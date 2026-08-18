@@ -59,6 +59,10 @@ See the architecture section in the [README](README.md#architecture). In short:
   where the content is. A layout that is merely as tall as its content leaves
   empty states stuck to the top and drop targets ending halfway down, and both
   read as unrelated bugs.
+- Never write a `<script>` inside an HTML file. Production serves the app under
+  `default-src 'self'`, which blocks inline scripts, so one does nothing at all
+  once packaged -- silently, and only there. `make dist` refuses to build a
+  bundle containing one.
 - Registries on this machine have no TLS. Anything that talks to one -- pull,
   push, login -- defaults to plain HTTP for `localhost` and friends, because the
   failure otherwise is `-9836: bad protocol version`, which explains nothing.
