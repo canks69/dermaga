@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/creack/pty"
@@ -49,6 +50,9 @@ func Open(
 	kind Kind,
 	id string,
 	command string,
+	// user runs the shell as someone else -- "root", a name, or "uid:gid".
+	// Empty means whoever the image declares, which is usually right.
+	user string,
 	onData func([]byte),
 	onClose func(error),
 ) (*Session, error) {
@@ -77,7 +81,13 @@ func Open(
 			cmd.Dir = home
 		}
 	default:
-		cmd = runner.Command(ctx, "exec", "-i", "-t", id, "/bin/sh", "-c", command)
+		args := []string{"exec", "-i", "-t"}
+		if strings.TrimSpace(user) != "" {
+			args = append(args, "--user", user)
+		}
+		args = append(args, id, "/bin/sh", "-c", command)
+
+		cmd = runner.Command(ctx, args...)
 	}
 
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")

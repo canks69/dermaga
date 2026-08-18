@@ -15,6 +15,7 @@ import { LogPane } from '../components/LogPane';
 import { Meter } from '../components/Meter';
 import { StatusBadge } from '../components/StatusBadge';
 import { DetailGrid, DetailLayout, DetailPane } from '../components/DetailLayout';
+import { SegmentedControl } from '../components/SegmentedControl';
 import type { TabDefinition } from '../components/Tabs';
 import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -48,6 +49,9 @@ interface ContainerDetailPageProps {
 
 export function ContainerDetailPage({ container, tab }: ContainerDetailPageProps) {
   const [pending, setPending] = useState<Action | null>(null);
+  // Empty means whoever the image runs as; root is the other one people reach
+  // for, usually to install something inside a running container.
+  const [shellUser, setShellUser] = useState('');
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [editing, setEditing] = useState<ContainerSpec | null>(null);
   const [loadingSpec, setLoadingSpec] = useState(false);
@@ -187,6 +191,7 @@ export function ContainerDetailPage({ container, tab }: ContainerDetailPageProps
       {tab === 'terminal' && (
         <DetailPane>
           <Suspense fallback={<TabPlaceholder>Loading terminal…</TabPlaceholder>}>
+            <TerminalUser value={shellUser} onChange={setShellUser} />
             <TerminalPane
               target={{ kind: 'container', id: container.id }}
               disabled={!running}
@@ -408,5 +413,45 @@ function OverviewTab({ container }: { container: Container }) {
         </Section>
       )}
     </DetailGrid>
+  );
+}
+
+/** Who the shell runs as. Changing it opens a fresh session as that user. */
+function TerminalUser({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [custom, setCustom] = useState(false);
+
+  return (
+    <div className="flex items-center gap-2 pb-2">
+      <span className="label-caps">Run as</span>
+
+      <SegmentedControl
+        ariaLabel="Run the shell as"
+        value={custom ? 'custom' : value === 'root' ? 'root' : 'default'}
+        onChange={(next) => {
+          if (next === 'custom') {
+            setCustom(true);
+            return;
+          }
+
+          setCustom(false);
+          onChange(next === 'root' ? 'root' : '');
+        }}
+        segments={[
+          { value: 'default', label: 'Image default' },
+          { value: 'root', label: 'root' },
+          { value: 'custom', label: 'Other…' },
+        ]}
+      />
+
+      {custom && (
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="name or uid:gid"
+          aria-label="User to run the shell as"
+          className="input w-40"
+        />
+      )}
+    </div>
   );
 }

@@ -125,7 +125,7 @@ export async function openStream(
 
 /** Stream ids are needed for terminals, which also send input back. */
 export async function openTerminalStream(
-  params: { kind: 'container' | 'machine'; id: string },
+  params: { kind: 'container' | 'machine'; id: string; user?: string },
   handlers: StreamHandlers
 ): Promise<{ streamId: string; close: () => void }> {
   const { streamId } = await invoke<{ streamId: string }>('terminal.open', params);

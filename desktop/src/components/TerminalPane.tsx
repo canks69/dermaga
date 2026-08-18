@@ -79,7 +79,7 @@ export function TerminalPane({
   disabled,
   disabledMessage = 'Start it to open a shell.',
 }: {
-  target: { kind: 'container' | 'machine'; id: string };
+  target: { kind: 'container' | 'machine'; id: string; user?: string };
   disabled: boolean;
   disabledMessage?: string;
 }) {
@@ -165,7 +165,8 @@ export function TerminalPane({
     // The target object is rebuilt on every render; its fields are what
     // actually identify the session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target.kind, target.id, disabled, attempt, isDark]);
+    // The user is part of the session: changing it opens a new one.
+  }, [target.kind, target.id, target.user, disabled, attempt, isDark]);
 
   if (disabled) {
     return (
