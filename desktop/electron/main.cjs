@@ -88,7 +88,7 @@ const SPLASH_SETTLE_MS = 700;
 // happening, and the main window is only revealed once there is something in it.
 function createSplash() {
   splashWindow = new BrowserWindow({
-    ...placeOn(380, 240),
+    ...placeOn(620, 392),
     frame: false,
     transparent: true,
     resizable: false,
@@ -114,6 +114,40 @@ function createSplash() {
   splashWindow.on('closed', () => {
     splashWindow = null;
   });
+}
+
+// A first-run job that takes minutes gets its own panel, and the window grows
+// to hold it: a one-line label is not enough to explain why nothing is
+// happening for two minutes.
+const SPLASH_SIZE = { width: 620, height: 392 };
+const SPLASH_SETUP_SIZE = { width: 620, height: 500 };
+
+// The kernel is 569 MB and the runtime fetches it from GitHub, so on a slow
+// line this legitimately takes the best part of an hour. There is no time limit
+// on it -- only on silence: if nothing at all is reported for this long, the
+// download has stalled rather than slowed, and the window opens anyway.
+const KERNEL_STALL_MS = 3 * 60 * 1000;
+
+function splashSetup(title, line, done = false) {
+  if (!splashWindow) return;
+
+  splashWindow.webContents.send('splash:setup', { title, line, done });
+
+  const size = done ? SPLASH_SIZE : SPLASH_SETUP_SIZE;
+  const [width, height] = splashWindow.getSize();
+  if (width === size.width && height === size.height) return;
+
+  const bounds = splashWindow.getBounds();
+  splashWindow.setBounds(
+    {
+      // Grow around the middle, so the window does not appear to jump.
+      x: Math.round(bounds.x - (size.width - bounds.width) / 2),
+      y: Math.round(bounds.y - (size.height - bounds.height) / 2),
+      width: size.width,
+      height: size.height,
+    },
+    true
+  );
 }
 
 function splashStep(id, state, label) {
@@ -379,7 +413,88 @@ ipcMain.handle('dermaga:pick-directory', async (_event, title) => {
   return result.canceled ? null : (result.filePaths[0] ?? null);
 });
 
+ipcMain.handle('splash:version', () => app.getVersion());
+
 ipcMain.on('splash:quit', () => app.quit());
+
+/**
+ * Starts the container services, installing the Linux kernel first if that is
+ * what is in the way.
+ *
+ * A Mac that has never run a container has no kernel, and the runtime refuses
+ * to start until one is set -- telling the user to go and run
+ * `container system kernel set` by hand. Nothing works without it, so this is
+ * part of getting ready rather than a choice worth interrupting for; it is the
+ * same reasoning that installs the CLI a step earlier.
+ */
+async function startServices() {
+  try {
+    await agent.invoke('system.start', { installKernel: false });
+  } catch (error) {
+    // The runtime refuses to start until a kernel is set on some versions;
+    // installing it is what ensureKernel does, so let it through and try again.
+    if (!/kernel/i.test(error.message || '')) throw error;
+
+    await ensureKernel();
+    await agent.invoke('system.start', { installKernel: true });
+  }
+}
+
+/**
+ * Makes sure a default kernel exists, installing it if not.
+ *
+ * The services start perfectly well without one; what fails is the first
+ * container, with "default kernel not configured for architecture arm64" and
+ * an instruction to go and run a CLI command. So this asks the agent directly
+ * rather than waiting to be told at the worst possible moment, and the splash
+ * grows to show the download rather than sitting on one silent line.
+ */
+async function ensureKernel() {
+  const { configured } = await agent
+    .invoke('system.kernelConfigured')
+    .catch(() => ({ configured: true }));
+
+  if (configured) return;
+
+  splashStep('services', 'active', 'Installing the Linux kernel\u2026');
+  splashSetup('Setting up the default Linux kernel', 'Starting the download\u2026');
+
+  let stalled;
+  const stall = new Promise((_resolve, reject) => {
+    stalled = reject;
+  });
+
+  let watchdog = setTimeout(() => stalled(new Error('kernel install stalled')), KERNEL_STALL_MS);
+
+  const alive = () => {
+    clearTimeout(watchdog);
+    watchdog = setTimeout(() => stalled(new Error('kernel install stalled')), KERNEL_STALL_MS);
+  };
+
+  try {
+    // However long it takes: a 569 MB download on a poor connection is slow,
+    // not broken, and cutting it off at some arbitrary minute means starting
+    // again from nothing.
+    await Promise.race([
+      runStream('system.installKernel', undefined, (line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+
+        alive();
+        splashSetup('Setting up the default Linux kernel', trimmed.slice(0, 200));
+      }),
+      stall,
+    ]);
+
+    splashStep('services', 'done', 'Kernel installed');
+  } catch (error) {
+    console.error('[dermaga] kernel install failed:', error.message);
+    splashStep('services', 'failed', 'Kernel not installed \u2014 retry from System');
+  } finally {
+    clearTimeout(watchdog);
+    splashSetup(null, null, true);
+  }
+}
 
 /**
  * The splash is the bootstrap, not a progress bar over one. It checks each
@@ -444,22 +559,19 @@ async function startUp() {
       splashStep('services', 'done', 'Services running');
     } else {
       splashStep('services', 'active', 'Starting services\u2026');
-      // Kernel install stays opt-in: it downloads, and the app has a screen
-      // that asks properly if this turns out to be why the start failed.
-      await agent.invoke('system.start', { installKernel: false });
+      await startServices();
       splashStep('services', 'done', 'Services started');
     }
+
+    // Checked whether or not the services needed starting: they run happily
+    // with no kernel at all, and the failure is saved up for the first
+    // container anyone tries to run.
+    await ensureKernel();
   } catch (error) {
     console.error('[dermaga] services did not start:', error.message);
     // Not fatal: the app opens on its own "services are down" screen, which
-    // offers the fix. A fresh install almost always lands here for one reason,
-    // so name it rather than leaving the user with "could not start".
-    const kernelMissing = /kernel/i.test(error.message || '');
-    splashStep(
-      'services',
-      'failed',
-      kernelMissing ? 'A Linux kernel is needed' : 'Could not start services'
-    );
+    // offers the fix and can say more than one line of splash can.
+    splashStep('services', 'failed', 'Could not start services');
   }
 
   // 5. The window itself.

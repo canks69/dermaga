@@ -212,6 +212,12 @@ func (a *Agent) registerSystem() {
 		return map[string]any{}, nil
 	})
 
+	// Asked during startup: the services start perfectly well without a kernel,
+	// and the failure only appears later when something tries to run.
+	a.server.Register("system.kernelConfigured", func(_ context.Context, _ json.RawMessage) (any, error) {
+		return map[string]any{"configured": a.system.KernelConfigured()}, nil
+	})
+
 	a.server.Register("system.diskUsage", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		return a.system.DiskUsage(ctx)
 	})
@@ -231,7 +237,9 @@ func (a *Agent) registerToolchain() {
 	// A Mac that has never run a container has no Linux kernel, and the runtime
 	// refuses to start until one is set. This is that fix, as one call.
 	a.server.Register("system.installKernel", func(ctx context.Context, _ json.RawMessage) (any, error) {
-		id, err := a.streams.runCommand(ctx, "kernel", func(ctx context.Context) (*exec.Cmd, error) {
+		// Through a pty: without a terminal this command prints one line and
+		// then hangs for ever instead of downloading anything.
+		id, err := a.streams.runCommandTTY(ctx, "kernel", func(ctx context.Context) (*exec.Cmd, error) {
 			return a.system.InstallKernelCommand(ctx), nil
 		})
 		if err != nil {
@@ -868,6 +876,7 @@ func (a *Agent) registerStreams() {
 			Kind    string `json:"kind"`
 			ID      string `json:"id"`
 			Command string `json:"command"`
+			User    string `json:"user"`
 		}](params)
 		if err != nil {
 			return nil, err
@@ -883,7 +892,9 @@ func (a *Agent) registerStreams() {
 			onData func([]byte),
 			onClose func(error),
 		) (*terminal.Session, error) {
-			return terminal.Open(ctx, a.runner, a.logger, kind, args.ID, args.Command, onData, onClose)
+			return terminal.Open(
+				ctx, a.runner, a.logger, kind, args.ID, args.Command, args.User, onData, onClose,
+			)
 		})
 		if err != nil {
 			return nil, rpc.Fail(err.Error())

@@ -7,8 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"regexp"
+	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/creack/pty"
 
 	"github.com/ryanbekhen/dermaga/internal/rpc"
 	"github.com/ryanbekhen/dermaga/internal/terminal"
@@ -190,4 +194,83 @@ func decodeBase64(data string) ([]byte, error) {
 	}
 
 	return decoded, nil
+}
+
+// runCommandTTY is runCommand for tools that refuse to work without a terminal.
+//
+// `container system kernel set --recommended` is one: given a plain pipe it
+// prints one line and then hangs for ever, with no network activity and no
+// exit -- which looks exactly like a broken download. Given a pty it gets on
+// with it. The output is a redrawing progress bar, so it is split on carriage
+// returns as well as newlines and stripped of the escape codes that move the
+// cursor about.
+func (s *streams) runCommandTTY(
+	ctx context.Context,
+	prefix string,
+	build func(context.Context) (*exec.Cmd, error),
+) (string, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	id := s.nextID(prefix)
+
+	cmd, err := build(ctx)
+	if err != nil {
+		cancel()
+		return "", err
+	}
+
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		cancel()
+		return "", err
+	}
+
+	// Wide enough that the CLI does not truncate its own progress line.
+	_ = pty.Setsize(ptmx, &pty.Winsize{Rows: 24, Cols: 120})
+
+	s.register(id, func() {
+		cancel()
+		_ = ptmx.Close()
+	})
+
+	go func() {
+		scanner := bufio.NewScanner(ptmx)
+		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		scanner.Split(scanLinesOrReturns)
+
+		var last string
+		for scanner.Scan() {
+			line := strings.TrimSpace(ansiPattern.ReplaceAllString(scanner.Text(), ""))
+			// The spinner redraws many times a second; only send what changed.
+			if line == "" || line == last {
+				continue
+			}
+			last = line
+			s.data(id, line)
+		}
+
+		_ = ptmx.Close()
+		s.end(id, cmd.Wait())
+	}()
+
+	return id, nil
+}
+
+// ansiPattern matches the escape sequences a progress bar uses to move the
+// cursor, clear the line and hide itself.
+var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]|[\x00-\x08\x0b\x0c\x0e-\x1f]`)
+
+// scanLinesOrReturns splits on either, because a redrawing bar never emits a
+// newline until it is finished.
+func scanLinesOrReturns(data []byte, atEOF bool) (int, []byte, error) {
+	for i, b := range data {
+		if b == '\n' || b == '\r' {
+			return i + 1, data[:i], nil
+		}
+	}
+
+	if atEOF && len(data) > 0 {
+		return len(data), data, nil
+	}
+
+	return 0, nil, nil
 }

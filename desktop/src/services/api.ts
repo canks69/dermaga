@@ -51,6 +51,12 @@ export const api = {
     return invoke('system.prune');
   },
 
+  /** Containers cannot run without one, and starting the services does not
+   *  need one -- so this is asked for separately. */
+  async getKernel(): Promise<{ configured: boolean }> {
+    return invoke('system.kernelConfigured');
+  },
+
   async getBuild(): Promise<BuildInfo> {
     return invoke('app.info');
   },

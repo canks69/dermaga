@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -234,4 +236,34 @@ func (sm *Manager) totalBytes(ctx context.Context) int64 {
 	}
 
 	return usage.Containers.SizeInBytes + usage.Images.SizeInBytes + usage.Volumes.SizeInBytes
+}
+
+// KernelConfigured reports whether a default kernel exists for this machine's
+// architecture.
+//
+// It is answered from disk rather than from the CLI because the CLI has no
+// "get" for this: the only way to learn there is no kernel is to run something
+// that needs one and read the failure, which is far too late. Starting the
+// services succeeds without a kernel, so nothing earlier in the bootstrap
+// notices either.
+func (sm *Manager) KernelConfigured() bool {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return true // Cannot tell; assume it is there rather than nag.
+	}
+
+	dir := filepath.Join(home, "Library", "Application Support", "com.apple.container", "kernels")
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "default.kernel-") {
+			return true
+		}
+	}
+
+	return false
 }
