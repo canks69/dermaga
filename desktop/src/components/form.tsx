@@ -87,18 +87,21 @@ export function Fieldset({
 }: {
   legend: string;
   hint?: string;
-  onAdd: () => void;
-  addLabel: string;
+  // Omitted by groups that are not a list of rows, such as the .env editor.
+  onAdd?: () => void;
+  addLabel?: string;
   children: ReactNode;
 }) {
   return (
     <fieldset className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
         <legend className="text-xs font-semibold">{legend}</legend>
-        <button type="button" onClick={onAdd} className="btn-ghost px-2 py-1 text-xs">
-          <Plus size={13} aria-hidden />
-          {addLabel}
-        </button>
+        {onAdd && (
+          <button type="button" onClick={onAdd} className="btn-ghost px-2 py-1 text-xs">
+            <Plus size={13} aria-hidden />
+            {addLabel}
+          </button>
+        )}
       </div>
       {hint && <p className="text-tiny text-ink-600 dark:text-ink-400">{hint}</p>}
       <div className="flex flex-col gap-2">{children}</div>

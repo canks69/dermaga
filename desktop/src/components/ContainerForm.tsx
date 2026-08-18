@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
 import type { ContainerSpec } from '../types';
 import { Checkbox, Field, Fieldset, Modal, Row } from './form';
+import { EnvEditor, formatEnv, parseEnv } from './EnvEditor';
+import { SegmentedControl } from './SegmentedControl';
 import { runTask } from './TaskRows';
 import { useTaskStore } from '../store/taskStore';
 
@@ -12,11 +14,6 @@ interface ContainerFormProps {
   editing?: string;
   initial?: ContainerSpec;
   onClose: () => void;
-}
-
-interface Pair {
-  key: string;
-  value: string;
 }
 
 const EMPTY: ContainerSpec = {
@@ -49,14 +46,43 @@ export function ContainerForm({ editing, initial, onClose }: ContainerFormProps)
   const [init, setInit] = useState(base.init ?? false);
   const [removeOnExit, setRemoveOnExit] = useState(base.removeOnExit ?? false);
 
-  const [env, setEnv] = useState<Pair[]>(
-    (base.env ?? []).map((entry) => {
-      const index = entry.indexOf('=');
-      return index === -1
-        ? { key: entry, value: '' }
-        : { key: entry.slice(0, index), value: entry.slice(index + 1) };
-    })
+  // Held as text: it is what people paste in, and what they read back.
+  const [envText, setEnvText] = useState(formatEnv(base.env ?? []));
+  const [envMode, setEnvMode] = useState<'fields' | 'text'>('fields');
+
+  /**
+   * Switching to text tidies up after the field rows: a row being typed into
+   * is a legitimate empty line there, but written out as a bare `=` it is
+   * rubbish in a .env file.
+   */
+  const changeEnvMode = (mode: 'fields' | 'text') => {
+    if (mode === 'text') {
+      setEnvText(
+        envText
+          .split('\n')
+          .filter((line) => line.trim().startsWith('#') || line.split('=')[0].trim() !== '')
+          .join('\n')
+      );
+    }
+
+    setEnvMode(mode);
+  };
+
+  // The text is the one source of truth; the field rows are a view of it, so
+  // switching back and forth can never leave the two disagreeing.
+  const envPairs = useMemo(
+    () =>
+      envText.split('\n').map((line) => {
+        const at = line.indexOf('=');
+        return at === -1
+          ? { key: line.trim(), value: '' }
+          : { key: line.slice(0, at).trim(), value: line.slice(at + 1).trim() };
+      }),
+    [envText]
   );
+
+  const setEnvPairs = (pairs: { key: string; value: string }[]) =>
+    setEnvText(pairs.map((p) => `${p.key}=${p.value}`).join('\n'));
   const [ports, setPorts] = useState(
     (base.ports ?? []).map((p) => ({ host: p.host, container: p.container, protocol: p.protocol }))
   );
@@ -80,7 +106,7 @@ export function ContainerForm({ editing, initial, onClose }: ContainerFormProps)
     // Quoting is deliberately not supported here: anything that needs a shell
     // belongs in an entrypoint, not in a text box.
     command: command.trim() ? command.trim().split(/\s+/) : undefined,
-    env: env.filter((e) => e.key.trim()).map((e) => `${e.key.trim()}=${e.value}`),
+    env: parseEnv(envText),
     ports: ports.filter((p) => p.host && p.container),
     mounts: mounts.filter((m) => m.source && m.target),
     cpus: Number(cpus) || undefined,
@@ -368,29 +394,47 @@ export function ContainerForm({ editing, initial, onClose }: ContainerFormProps)
             ? 'Values inherited from the image are listed too; they will be set explicitly on recreate.'
             : undefined
         }
+        onAdd={envMode === 'fields' ? () => setEnvText(envText ? `${envText}\n=` : '=') : undefined}
         addLabel="Add variable"
-        onAdd={() => setEnv([...env, { key: '', value: '' }])}
       >
-        {env.map((entry, index) => (
-          <Row key={index} onRemove={() => setEnv(env.filter((_, i) => i !== index))}>
-            <input
-              value={entry.key}
-              onChange={(e) =>
-                setEnv(env.map((v, i) => (i === index ? { ...v, key: e.target.value } : v)))
-              }
-              placeholder="KEY"
-              className="input w-1/3 font-mono text-xs"
-            />
-            <input
-              value={entry.value}
-              onChange={(e) =>
-                setEnv(env.map((v, i) => (i === index ? { ...v, value: e.target.value } : v)))
-              }
-              placeholder="value"
-              className="input w-full font-mono text-xs"
-            />
-          </Row>
-        ))}
+        <SegmentedControl
+          ariaLabel="How to edit the environment"
+          value={envMode}
+          onChange={changeEnvMode}
+          segments={[
+            { value: 'fields', label: 'Fields' },
+            { value: 'text', label: '.env text' },
+          ]}
+        />
+
+        {envMode === 'text' ? (
+          <EnvEditor value={envText} onChange={setEnvText} />
+        ) : (
+          envPairs.map((entry, index) => (
+            <Row key={index} onRemove={() => setEnvPairs(envPairs.filter((_, i) => i !== index))}>
+              <input
+                value={entry.key}
+                onChange={(e) =>
+                  setEnvPairs(
+                    envPairs.map((v, i) => (i === index ? { ...v, key: e.target.value } : v))
+                  )
+                }
+                placeholder="KEY"
+                className="input w-1/3 font-mono text-xs"
+              />
+              <input
+                value={entry.value}
+                onChange={(e) =>
+                  setEnvPairs(
+                    envPairs.map((v, i) => (i === index ? { ...v, value: e.target.value } : v))
+                  )
+                }
+                placeholder="value"
+                className="input flex-1 font-mono text-xs"
+              />
+            </Row>
+          ))
+        )}
       </Fieldset>
     </Modal>
   );
