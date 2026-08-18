@@ -419,6 +419,9 @@ function OverviewTab({ container }: { container: Container }) {
 /** Who the shell runs as. Changing it opens a fresh session as that user. */
 function TerminalUser({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const [custom, setCustom] = useState(false);
+  // Typed separately from what is applied: every change reopens the shell, so
+  // committing on each keystroke would open a session for "r", "ro", "roo"…
+  const [draft, setDraft] = useState(value);
 
   return (
     <div className="flex items-center gap-2 pb-2">
@@ -430,10 +433,12 @@ function TerminalUser({ value, onChange }: { value: string; onChange: (value: st
         onChange={(next) => {
           if (next === 'custom') {
             setCustom(true);
+            setDraft(value === 'root' ? '' : value);
             return;
           }
 
           setCustom(false);
+          setDraft('');
           onChange(next === 'root' ? 'root' : '');
         }}
         segments={[
@@ -444,13 +449,20 @@ function TerminalUser({ value, onChange }: { value: string; onChange: (value: st
       />
 
       {custom && (
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="name or uid:gid"
-          aria-label="User to run the shell as"
-          className="input w-40"
-        />
+        <>
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && onChange(draft.trim())}
+            onBlur={() => onChange(draft.trim())}
+            placeholder="name or uid:gid"
+            aria-label="User to run the shell as"
+            className="input w-40"
+          />
+          {draft.trim() !== value && (
+            <span className="text-tiny text-ink-500">press ↵ to apply</span>
+          )}
+        </>
       )}
     </div>
   );
