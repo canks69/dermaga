@@ -251,6 +251,10 @@ func (m *Manager) run(ctx context.Context) {
 	ticker := time.NewTicker(6 * time.Hour)
 	defer ticker.Stop()
 
+	// nil until a change asks for a sweep; a select on a nil channel simply
+	// never fires, which is exactly the wanted behaviour when none is pending.
+	var settle <-chan time.Time
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -261,17 +265,14 @@ func (m *Manager) run(ctx context.Context) {
 		case <-m.sweep:
 			// A pull publishes the image before its layers have finished
 			// unpacking, and scanning it then finds an image that is not all
-			// there yet -- which reads as "no vulnerabilities". Let the dust
-			// settle first, and collapse the burst of changes a pull produces
-			// into one pass.
-			settle := time.NewTimer(settleDelay)
-			select {
-			case <-ctx.Done():
-				settle.Stop()
-				return
-			case <-settle.C:
-			}
+			// there yet -- which reads as "no vulnerabilities". So the sweep
+			// waits for the dust to settle. Waiting on a timer channel rather
+			// than sleeping keeps the loop answering: a scan the user asked for
+			// by hand should not sit behind half a minute of quiet.
+			settle = time.After(settleDelay)
 
+		case <-settle:
+			settle = nil
 			m.runSweep(ctx)
 		case reference := <-m.queue:
 			m.scan(ctx, reference)
