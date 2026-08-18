@@ -102,6 +102,12 @@ function createSplash() {
     },
   });
 
+  splashWindow.webContents.on('console-message', (event) => {
+    if (event.level === 'error' || event.level === 'warning') {
+      console.error(`[splash] ${event.message}`);
+    }
+  });
+
   splashWindow.once('ready-to-show', () => {
     splashWindow?.show();
     // Launched from a terminal rather than Finder, macOS leaves the app behind
@@ -109,7 +115,12 @@ function createSplash() {
     splashWindow?.focus();
     app.focus({ steal: true });
   });
-  void splashWindow.loadFile(path.join(__dirname, 'splash.html'));
+  // The version travels in the URL rather than over IPC: a round trip that
+  // fails leaves the splash showing a placeholder, and it did exactly that in
+  // 1.3.1. A query string cannot fail once the page has loaded at all.
+  void splashWindow.loadFile(path.join(__dirname, 'splash.html'), {
+    query: { version: app.getVersion() },
+  });
 
   splashWindow.on('closed', () => {
     splashWindow = null;

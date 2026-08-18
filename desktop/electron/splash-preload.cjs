@@ -9,6 +9,5 @@ contextBridge.exposeInMainWorld('splash', {
   onFatal: (callback) => ipcRenderer.on('splash:fatal', (_event, problem) => callback(problem)),
   // A long first-run job -- installing the kernel -- gets a panel of its own.
   onSetup: (callback) => ipcRenderer.on('splash:setup', (_event, setup) => callback(setup)),
-  version: () => ipcRenderer.invoke('splash:version'),
   quit: () => ipcRenderer.send('splash:quit'),
 });

@@ -292,9 +292,8 @@
   const setupTitle = document.getElementById('setup-title');
   const setupLine = document.getElementById('setup-line');
 
-  window.splash?.version?.().then((value) => {
-    document.getElementById('version').textContent = value;
-  });
+  const version = new URLSearchParams(location.search).get('version');
+  if (version) document.getElementById('version').textContent = `v${version}`;
 
   window.splash?.onStep(({ id, state, label }) => {
     if (!labels.has(id)) return;
