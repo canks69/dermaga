@@ -81,7 +81,7 @@ export function DataTable<T>({
     <div className="-mr-5 flex min-h-0 flex-col overflow-hidden pr-5">
       <div
         style={template}
-        className="grid items-center gap-3 border-b border-ink-200 px-3 pb-1.5 text-tiny font-semibold uppercase tracking-wide text-ink-500 dark:border-ink-700"
+        className="grid items-center gap-3 border-b border-ink-200 px-3 pb-2.5 pt-1 text-tiny font-semibold uppercase tracking-wide text-ink-500 dark:border-ink-700"
       >
         {selection && (
           <RowCheckbox

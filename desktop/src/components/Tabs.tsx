@@ -14,7 +14,10 @@ interface TabsProps {
 
 export function Tabs({ tabs, active, onSelect }: TabsProps) {
   return (
-    <div role="tablist" className="flex gap-1 border-b border-ink-200 px-4 dark:border-ink-700">
+    // No rule under the strip: every pane below it starts with a heading of
+    // its own that already draws one, and two lines a few pixels apart read as
+    // a mistake. The active tab keeps its own underline.
+    <div role="tablist" className="flex gap-1 px-4">
       {tabs.map(({ id, label, icon: Icon }) => {
         const selected = id === active;
 
