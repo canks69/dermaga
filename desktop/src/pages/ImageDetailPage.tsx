@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Boxes, Layers, Trash2 } from 'lucide-react';
+import { Boxes, Info, Layers, ShieldCheck, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Badge } from '../components/DataTable';
 import { DetailGrid, DetailLayout } from '../components/DetailLayout';
 import { Row, Section } from '../components/DetailRow';
+import type { TabDefinition } from '../components/Tabs';
+import { VulnerabilityPane } from '../components/VulnerabilityPane';
 import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
@@ -11,11 +13,17 @@ import { useUIStore } from '../store/uiStore';
 import type { ImageDetail, ImageVariant } from '../types';
 import { formatBytes, formatDuration, shortDigest, splitEnv } from '../utils/format';
 
+const TABS: TabDefinition[] = [
+  { id: 'overview', label: 'Overview', icon: Info },
+  { id: 'vulnerabilities', label: 'Vulnerabilities', icon: ShieldCheck },
+];
+
 export function ImageDetailPage({ reference }: { reference: string }) {
   const [detail, setDetail] = useState<ImageDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [variantIndex, setVariantIndex] = useState(0);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [tab, setTab] = useState('overview');
   const [showHistory, setShowHistory] = useState(false);
 
   const back = useUIStore((s) => s.back);
@@ -78,6 +86,9 @@ export function ImageDetailPage({ reference }: { reference: string }) {
         </>
       }
       subtitle={detail ? shortDigest(detail.digest) : reference}
+      tabs={TABS}
+      activeTab={tab}
+      onSelectTab={setTab}
       actions={
         <button
           onClick={() => setConfirmingDelete(true)}
@@ -88,7 +99,9 @@ export function ImageDetailPage({ reference }: { reference: string }) {
         </button>
       }
     >
-      {error && !detail ? (
+      {tab === 'vulnerabilities' ? (
+        <VulnerabilityPane reference={reference} />
+      ) : error && !detail ? (
         <p className="flex flex-1 items-center justify-center text-sm text-ink-600 dark:text-ink-400">
           {error}
         </p>

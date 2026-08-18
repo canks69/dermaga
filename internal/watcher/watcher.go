@@ -58,6 +58,19 @@ type Watcher struct {
 	hasSnapshot bool
 
 	poke chan struct{}
+
+	// Called whenever the snapshot actually changed, including changes made
+	// outside Dermaga entirely.
+	onChange func(Snapshot)
+}
+
+// OnChange registers a listener for real changes. One listener is enough for
+// what this serves; a second call replaces the first.
+func (w *Watcher) OnChange(listener func(Snapshot)) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.onChange = listener
 }
 
 func New(sources Sources, logger *slog.Logger) *Watcher {
@@ -143,11 +156,19 @@ func (w *Watcher) refresh(ctx context.Context) {
 		return
 	}
 
+	onChange := w.onChange
+
 	targets := make([]chan Snapshot, 0, len(w.subscribers))
 	for _, ch := range w.subscribers {
 		targets = append(targets, ch)
 	}
 	w.mu.Unlock()
+
+	// Anything the host changed behind Dermaga's back -- an image pulled in a
+	// terminal, a container removed by a script -- is only ever noticed here.
+	if onChange != nil {
+		onChange(snapshot)
+	}
 
 	for _, ch := range targets {
 		select {

@@ -16,8 +16,10 @@ import type {
   Settings,
   SystemStatus,
   ToolchainStatus,
+  ScannerStatus,
   Volume,
   VolumeSpec,
+  VulnerabilityReport,
 } from '../types';
 
 /**
@@ -62,6 +64,33 @@ export const api = {
   /** Whether the buildkit container is up; every build needs it running. */
   async getBuilder(): Promise<BuilderStatus> {
     return invoke('images.builderStatus');
+  },
+
+  // --- vulnerability scanning ---------------------------------------------
+
+  async getScannerStatus(): Promise<ScannerStatus> {
+    return invoke('scanner.status');
+  },
+
+  /** Queues a scan; the result arrives as a pushed status, not a return value. */
+  async scanImage(reference: string): Promise<void> {
+    await invoke('scanner.scan', { reference });
+  },
+
+  async getScanReport(reference: string): Promise<VulnerabilityReport | null> {
+    return invoke('scanner.report', { reference });
+  },
+
+  async getScanReports(): Promise<Record<string, VulnerabilityReport>> {
+    return (await invoke<Record<string, VulnerabilityReport>>('scanner.reports')) ?? {};
+  },
+
+  /**
+   * Drops results for images that no longer exist. Results for images still
+   * present are kept: discarding those would only mean scanning them again.
+   */
+  async clearScans(): Promise<{ removed: number }> {
+    return invoke('scanner.clear');
   },
 
   // --- settings -----------------------------------------------------------

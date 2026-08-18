@@ -15,6 +15,7 @@ import (
 	"github.com/ryanbekhen/dermaga/internal/machines"
 	"github.com/ryanbekhen/dermaga/internal/networks"
 	"github.com/ryanbekhen/dermaga/internal/rpc"
+	"github.com/ryanbekhen/dermaga/internal/scanner"
 	"github.com/ryanbekhen/dermaga/internal/settings"
 	"github.com/ryanbekhen/dermaga/internal/system"
 	"github.com/ryanbekhen/dermaga/internal/terminal"
@@ -43,6 +44,7 @@ type Agent struct {
 	networks   *networks.Manager
 	machines   *machines.Manager
 	system     *system.Manager
+	scanner    *scanner.Manager
 	toolchain  *toolchain.Manager
 	settings   *settings.Store
 	watcher    *watcher.Watcher
@@ -66,6 +68,11 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 		if pending != nil {
 			pending.Changed()
 		}
+		// A new image should have an answer waiting by the time anyone opens
+		// it; the sweep collapses a burst of changes into one pass.
+		if agent.scanner != nil {
+			agent.scanner.Sweep()
+		}
 	})
 
 	agent.containers = containers.NewManager(runner, logger, changed)
@@ -75,6 +82,35 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 	agent.machines = machines.NewManager(runner, logger, changed)
 	agent.system = system.NewManager(runner, logger, changed)
 	agent.toolchain = toolchain.NewManager(runner, logger)
+	agent.scanner = scanner.NewManager(runner, logger)
+
+	// The scanner works on its own goroutine and reports where it has got to;
+	// the window shows that in the status bar without ever having asked.
+	agent.scanner.OnChange(func(status scanner.Status) {
+		server.Notify("scanner.status", status)
+	})
+
+	// Results land in the list the moment they exist, rather than when the
+	// window next thinks to ask.
+	agent.scanner.OnReport(func(report scanner.Report) {
+		server.Notify("scanner.result", report)
+	})
+
+	// Where the sweep finds its work. Kept as a callback so the scanner never
+	// imports the image package.
+	agent.scanner.SetSource(func(ctx context.Context) ([]scanner.ImageRef, error) {
+		found, err := agent.images.List(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		refs := make([]scanner.ImageRef, 0, len(found))
+		for _, image := range found {
+			refs = append(refs, scanner.ImageRef{Reference: image.Reference, Digest: image.Digest})
+		}
+
+		return refs, nil
+	})
 
 	pending = watcher.New(watcher.Sources{
 		Containers: func(ctx context.Context) ([]containers.Container, error) {
@@ -86,6 +122,13 @@ func New(server *rpc.Server, logger *slog.Logger) *Agent {
 		Networks: agent.networks.List,
 	}, logger)
 	agent.watcher = pending
+
+	// Images pulled in a terminal never touch a Dermaga manager, so the only
+	// place they show up is the watcher. Scanning follows what is actually
+	// there, not only what this app did.
+	pending.OnChange(func(watcher.Snapshot) {
+		agent.scanner.Sweep()
+	})
 
 	return agent
 }
@@ -102,6 +145,7 @@ func (a *Agent) Run(ctx context.Context) error {
 
 	go a.containers.Stats().Run(ctx)
 	go a.watcher.Run(ctx)
+	a.scanner.Start(ctx)
 
 	a.register()
 
@@ -124,6 +168,7 @@ func (a *Agent) register() {
 
 	a.registerSettings()
 	a.registerToolchain()
+	a.registerScanner()
 	a.registerContainers()
 	a.registerImages()
 	a.registerVolumes()
@@ -224,6 +269,60 @@ func (a *Agent) registerToolchain() {
 		}
 
 		return map[string]any{"streamId": id}, nil
+	})
+}
+
+// --- scanner --------------------------------------------------------------
+
+func (a *Agent) registerScanner() {
+	a.server.Register("scanner.status", func(_ context.Context, _ json.RawMessage) (any, error) {
+		return a.scanner.Status(), nil
+	})
+
+	// Queues the scan and returns at once: the result arrives as a pushed
+	// status followed by a report, so the window never waits on Trivy.
+	a.server.Register("scanner.scan", func(_ context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Reference string `json:"reference"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(args.Reference) == "" {
+			return nil, rpc.Fail("a scan needs an image reference")
+		}
+
+		if err := a.scanner.Scan(args.Reference); err != nil {
+			return nil, rpc.Fail(err.Error())
+		}
+
+		return map[string]any{"queued": true}, nil
+	})
+
+	a.server.Register("scanner.reports", func(_ context.Context, _ json.RawMessage) (any, error) {
+		return a.scanner.Reports(), nil
+	})
+
+	// Results for images that still exist are worth keeping -- discarding them
+	// only means scanning them again. What goes is what no longer has an image.
+	a.server.Register("scanner.clear", func(ctx context.Context, _ json.RawMessage) (any, error) {
+		return map[string]any{"removed": a.scanner.ForgetMissing(ctx)}, nil
+	})
+
+	a.server.Register("scanner.report", func(_ context.Context, params json.RawMessage) (any, error) {
+		args, err := decodeParams[struct {
+			Reference string `json:"reference"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+
+		report, ok := a.scanner.Report(args.Reference)
+		if !ok {
+			return nil, nil
+		}
+
+		return report, nil
 	})
 }
 

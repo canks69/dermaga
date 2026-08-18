@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, FolderOpen, Hammer, Trash2 } from 'lucide-react';
+import { Download, FolderOpen, Hammer, ShieldCheck, Trash2 } from 'lucide-react';
 import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
@@ -15,6 +15,7 @@ import { TaskRows, runTask } from '../components/TaskRows';
 import { api } from '../services/api';
 import { pickDirectory } from '../services/ipc';
 import { useResourceStore } from '../store/resourceStore';
+import { useScannerStore } from '../store/scannerStore';
 import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
 import { useUIStore } from '../store/uiStore';
@@ -75,6 +76,7 @@ function groupByDigest(images: Image[]): ImageGroup[] {
 const COLUMNS: Column[] = [
   { key: 'name', label: 'Repository', width: 'minmax(160px,1.6fr)' },
   { key: 'tags', label: 'Tags', width: 'minmax(120px,1fr)' },
+  { key: 'vulnerabilities', label: 'Vulnerabilities', width: '132px' },
   { key: 'digest', label: 'Digest', width: '116px' },
   { key: 'platform', label: 'Platform', width: '124px' },
   { key: 'size', label: 'Size', width: '84px', align: 'right' },
@@ -198,6 +200,7 @@ export function ImagesPage() {
                 <Badge key={tag}>{tag}</Badge>
               ))}
             </div>,
+            <VulnerabilityCell key="vulnerabilities" group={group} />,
             <Muted key="digest" mono>
               {shortDigest(group.digest)}
             </Muted>,
@@ -279,6 +282,55 @@ export function ImagesPage() {
         />
       )}
     </div>
+  );
+}
+
+// Counts at a glance, worst first. Only the severities that matter get colour:
+// four coloured numbers in every row would be noise rather than a signal.
+const SEVERITY_TONE: Record<string, string> = {
+  CRITICAL: 'text-brand-700 dark:text-brand-400',
+  HIGH: 'text-brand-600 dark:text-brand-400',
+  MEDIUM: 'text-amber-700 dark:text-amber-500',
+  LOW: 'text-ink-500',
+};
+
+/**
+ * The severity counts for a row, from whichever of its tags has been scanned --
+ * they share a digest, so they share an answer.
+ */
+function VulnerabilityCell({ group }: { group: ImageGroup }) {
+  const reports = useScannerStore((s) => s.reports);
+  const scanning = useScannerStore((s) => s.status?.state === 'scanning');
+
+  const report = group.tags.map((t) => reports[t.reference]).find(Boolean);
+
+  if (!report) {
+    return <Muted>{scanning ? 'scanning…' : '—'}</Muted>;
+  }
+
+  const counts = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].filter((s) => report.summary?.[s]);
+
+  if (counts.length === 0) {
+    return (
+      <span className="flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-500">
+        <ShieldCheck size={12} aria-hidden />
+        clean
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="flex items-center gap-1.5 text-xs tabular-nums"
+      title={counts.map((s) => `${report.summary[s]} ${s.toLowerCase()}`).join(', ')}
+    >
+      {counts.map((severity) => (
+        <span key={severity} className={`font-semibold ${SEVERITY_TONE[severity]}`}>
+          {report.summary[severity]}
+          <span className="ml-px text-tiny font-normal opacity-60">{severity[0]}</span>
+        </span>
+      ))}
+    </span>
   );
 }
 

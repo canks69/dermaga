@@ -4,6 +4,7 @@ import { SettingsPanel } from './components/SettingsPanel';
 import { Sidebar } from './components/Sidebar';
 import { StatusBar } from './components/StatusBar';
 import { Toasts } from './components/Toasts';
+import { subscribeToScanner } from './store/scannerStore';
 import { useEventStream } from './hooks/useEventStream';
 import { useFullScreen } from './hooks/useFullScreen';
 import { useTheme } from './hooks/useTheme';
@@ -28,6 +29,9 @@ export function App() {
   useTheme();
 
   const connection = useEventStream();
+
+  // The scanner reports itself; this only opens the ear for it.
+  useEffect(() => subscribeToScanner(), []);
 
   const route = useUIStore((s) => s.route);
   const navigate = useUIStore((s) => s.navigate);
@@ -159,7 +163,7 @@ export function App() {
               <SystemPage status={system} onRefresh={() => void refreshSystem()} />
             )}
 
-            {route.name === 'settings' && <SettingsPanel system={system} connection={connection} />}
+            {route.name === 'settings' && <SettingsPanel />}
 
             {route.name === 'help' && <HelpView version={build?.version ?? APP_VERSION} />}
           </main>

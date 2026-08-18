@@ -283,6 +283,45 @@ export interface BuildSpec {
   noCache?: boolean;
 }
 
+/** What the background vulnerability scanner is doing. */
+export interface ScannerStatus {
+  installed: boolean;
+  version?: string;
+  brewAvailable: boolean;
+  state: 'idle' | 'installing' | 'updating' | 'updatingDatabase' | 'scanning' | 'failed';
+  updateAvailable?: boolean;
+  latestVersion?: string;
+  detail?: string;
+  target?: string;
+  /** Position within a sweep of several images, when there is one. */
+  position?: number;
+  total?: number;
+  percent?: number;
+  error?: string;
+  databaseUpdatedAt?: string;
+  databaseNextAt?: string;
+  databaseReady: boolean;
+}
+
+export interface Finding {
+  id: string;
+  package: string;
+  installed?: string;
+  /** Empty when upstream has no fix yet, which is worth showing as such. */
+  fixed?: string;
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN';
+  title?: string;
+  url?: string;
+}
+
+export interface VulnerabilityReport {
+  reference: string;
+  scannedAt: string;
+  os?: string;
+  summary: Record<string, number>;
+  findings: Finding[];
+}
+
 /** Whether the buildkit container every build runs through is up. */
 export interface BuilderStatus {
   running: boolean;

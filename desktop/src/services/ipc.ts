@@ -20,9 +20,7 @@ interface Bridge {
   checkUpdate?: () => Promise<UpdateCheck>;
   downloadUpdate?: (assetUrl: string, version: string) => Promise<string>;
   installUpdate?: (dmgPath: string) => Promise<void>;
-  onUpdateProgress?: (
-    callback: (value: { received: number; total: number }) => void
-  ) => () => void;
+  onUpdateProgress?: (callback: (value: { received: number; total: number }) => void) => () => void;
 }
 
 /** What the main process found on GitHub, if anything newer is there. */
@@ -79,7 +77,8 @@ export const updates = {
   },
 
   /** Opens the installer; Dermaga closes itself a moment later. */
-  install: (dmgPath: string): Promise<void> => bridge().installUpdate?.(dmgPath) ?? Promise.resolve(),
+  install: (dmgPath: string): Promise<void> =>
+    bridge().installUpdate?.(dmgPath) ?? Promise.resolve(),
 
   onProgress: (callback: (value: { received: number; total: number }) => void): (() => void) =>
     bridge().onUpdateProgress?.(callback) ?? (() => {}),

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowUpCircle, HardDrive, Play, Square, Trash2 } from 'lucide-react';
+import { ArrowUpCircle, Eraser, HardDrive, Play, Square, Trash2 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { CommandProgress, useCommandProgress } from '../components/CommandProgress';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -10,9 +10,11 @@ import { DetailGrid, DetailLayout, DetailPane } from '../components/DetailLayout
 import type { TabDefinition } from '../components/Tabs';
 import { Checkbox } from '../components/form';
 import { api } from '../services/api';
+import { useResourceStore } from '../store/resourceStore';
+import { useScannerStore } from '../store/scannerStore';
 import { useToastStore } from '../store/toastStore';
 import type { DiskUsage, SystemStatus, ToolchainStatus, UsageEntry } from '../types';
-import { formatMemory } from '../utils/format';
+import { formatDuration, formatMemory } from '../utils/format';
 import { Info, ScrollText } from 'lucide-react';
 
 const TABS: TabDefinition[] = [
@@ -39,6 +41,27 @@ export function SystemPage({
   const [installKernel, setInstallKernel] = useState(false);
   const [confirmingStop, setConfirmingStop] = useState(false);
   const [confirmingPrune, setConfirmingPrune] = useState(false);
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  const scanner = useScannerStore((s) => s.status);
+  const reports = useScannerStore((s) => s.reports);
+  const clearReports = useScannerStore((s) => s.clearReports);
+  const setReport = useScannerStore((s) => s.setReport);
+  const scanCount = Object.keys(reports).length;
+  const [configPath, setConfigPath] = useState('~/.dermaga/config.json');
+  const images = useResourceStore((s) => s.images);
+  const containers = useResourceStore((s) => s.containers);
+
+  // Results whose image has since been deleted. Those are the only ones worth
+  // clearing -- the rest would just be scanned again.
+  // Named in the confirmation, because "reclaim 1.4 GB" does not tell anyone
+  // which of their images is about to disappear.
+  const doomed = images
+    .filter((image) => !containers.some((container) => container.image === image.reference))
+    .map((image) => image.reference.split('/').pop() ?? image.reference);
+
+  const stale = Object.keys(reports).filter(
+    (reference) => !images.some((image) => image.reference === reference)
+  ).length;
   const pushToast = useToastStore((s) => s.push);
 
   const running = status?.running ?? false;
@@ -64,6 +87,12 @@ export function SystemPage({
     } catch {
       setToolchain(null);
     }
+  }, []);
+
+  useEffect(() => {
+    // The agent reports where it actually wrote the file.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void api.getSettings().then(({ path }) => path && setConfigPath(path));
   }, []);
 
   useEffect(() => {
@@ -157,6 +186,7 @@ export function SystemPage({
             <Row label="State" value={status?.status ?? 'unknown'} />
             <Row label="API server" value={status?.apiServerVersion} />
             <Row label="Build" value={status?.apiServerBuild} />
+            <Row label="Transport" value="JSON-RPC over stdio" />
           </Section>
 
           <Section title="Apple Container CLI">
@@ -200,9 +230,36 @@ export function SystemPage({
           </Section>
 
           <Section title="Paths">
+            <Row label="Config file" value={configPath} mono copyable />
             <Row label="App root" value={status?.appRoot} mono copyable />
             <Row label="Install root" value={status?.installRoot} mono copyable />
             <Row label="Log root" value={status?.logRoot || 'macOS log facility'} mono />
+          </Section>
+
+          <Section
+            title="Vulnerability scans"
+            action={
+              stale > 0 ? (
+                <Button icon={Eraser} onClick={() => setConfirmingClear(true)}>
+                  Clear {stale} stale result{stale === 1 ? '' : 's'}
+                </Button>
+              ) : null
+            }
+          >
+            <Row
+              label="Scanner"
+              value={scanner?.version ? `Trivy ${scanner.version}` : 'not installed yet'}
+            />
+            <Row
+              label="Database"
+              value={
+                scanner?.databaseUpdatedAt
+                  ? `updated ${formatDuration(scanner.databaseUpdatedAt)} ago`
+                  : 'not downloaded yet'
+              }
+            />
+            <Row label="Images scanned" value={String(scanCount)} />
+            <Row label="Stale results" value={stale > 0 ? `${stale} for deleted images` : 'none'} />
           </Section>
 
           <Section
@@ -217,7 +274,7 @@ export function SystemPage({
                   disabled={pending !== null}
                   onClick={() => setConfirmingPrune(true)}
                 >
-                  Reclaim {bytesToLabel(reclaimable)}
+                  Delete unused · {bytesToLabel(reclaimable)}
                 </Button>
               ) : null
             }
@@ -245,10 +302,47 @@ export function SystemPage({
         </DetailPane>
       )}
 
+      {confirmingClear && (
+        <ConfirmDialog
+          title={`Clear ${stale} stale result${stale === 1 ? '' : 's'}?`}
+          body="Only results for images that no longer exist are removed. Everything still on disk keeps its result, so nothing has to be scanned again."
+          confirmLabel="Clear"
+          onConfirm={() => {
+            setConfirmingClear(false);
+            void api
+              .clearScans()
+              .then(async ({ removed }) => {
+                // The agent decides what actually went; take its word for it.
+                clearReports();
+                const remaining = await api.getScanReports();
+                for (const [reference, report] of Object.entries(remaining)) {
+                  setReport(reference, report);
+                }
+                pushToast(
+                  removed > 0
+                    ? `Removed ${removed} result${removed === 1 ? '' : 's'} for deleted images`
+                    : 'Nothing to clear'
+                );
+              })
+              .catch((err: unknown) =>
+                pushToast(
+                  err instanceof Error ? err.message : 'Could not clear the results',
+                  'error'
+                )
+              );
+          }}
+          onCancel={() => setConfirmingClear(false)}
+        />
+      )}
+
       {confirmingPrune && (
         <ConfirmDialog
-          title={`Reclaim ${bytesToLabel(reclaimable)}?`}
-          body="Every image no container is using is deleted, along with stopped containers and unused volumes and networks. Images have to be pulled again to use them."
+          title={`Delete ${doomed.length} unused image${doomed.length === 1 ? '' : 's'}?`}
+          body={
+            doomed.length > 0
+              ? `These are deleted and have to be pulled again: ${doomed.join(', ')}. Stopped containers and unused volumes and networks go too. Anything built here and never pushed cannot be recovered.`
+              : 'Stopped containers and unused volumes and networks are removed. No images are affected.'
+          }
           confirmLabel="Reclaim"
           onConfirm={() => {
             setConfirmingPrune(false);
