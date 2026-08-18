@@ -25,18 +25,24 @@ everything you do is immediately visible to `container ls` and vice versa.
 
 - **Containers** — create, start, stop, restart, edit and remove; multi-select for bulk actions. Per
   container: live CPU and memory, IPv4/IPv6, gateway, MAC, MTU, DNS, mounts, environment,
-  capabilities and runtime flags.
+  capabilities and runtime flags. Published ports open in your browser.
 - **Terminal** — a real shell in any running container or machine, backed by a pty, with a prompt,
   line editing, colours and resize. Open it as the image's own user, as root, or as anyone else.
 - **Logs** — follow container, machine and service logs, with filtering and follow-on-scroll.
 - **Images** — build from a Dockerfile with live progress, pull, inspect layers, build history and
   the config a container inherits. Tags sharing a digest are shown as one image.
+- **Files** — browse a container's filesystem, drag files and folders in from Finder, and drag them
+  back out again.
+- **Registries** — sign in to a registry, tag an image and push it. Credentials go to Apple's CLI on
+  stdin and are never held here.
 - **Vulnerabilities** — every image is scanned in the background and the counts appear beside it in
   the list. Per image: the CVEs, the package each one is in, and the version that fixes it. Runs
   entirely on your Mac; nothing about your images is sent anywhere.
 - **Volumes and networks** — create and delete, and see which containers depend on them.
 - **Machines** — create, boot, stop, resize (CPU, memory, home mount) and delete the Linux VMs.
 - **System** — start and stop the background services, read their logs, and reclaim disk space.
+- **Speaks up** — a container that stops without being asked to is reported: in the window, as a
+  sound when the window is not what you are looking at, and as a notification.
 - **Live by default** — no refresh button anywhere. Changes made in a terminal appear within two
   seconds; changes made in Dermaga appear immediately.
 - **Updates itself** — when a newer release exists the status bar says so; one click downloads it,
@@ -144,6 +150,8 @@ cmd/dermaga-agent/   entrypoint: JSON-RPC on stdio
 internal/cli/        runs `container`; the only package that touches os/exec
 internal/containers/ list, lifecycle, spec, live stats
 internal/images/     list, inspect, build, pull, delete, prune
+internal/files/      browse a container's filesystem, copy in and out
+internal/registry/   registry logins, tag and push
 internal/scanner/    Trivy: install, database, background scans, stored results
 internal/volumes/    ·  internal/networks/  ·  internal/machines/
 internal/system/     services and disk usage
@@ -189,6 +197,9 @@ sequenceDiagram
 | `containers.list/get/spec/start/stop/remove/update`                                   | Lifecycle                                |
 | `images.list/inspect/delete/prune`                                                    | Images                                   |
 | `scanner.status` `scanner.scan` `scanner.report` `scanner.reports` `scanner.clear`    | Vulnerabilities, pushed as they finish   |
+| `files.list` `files.copyIn` `files.copyOut`                                           | A container's filesystem                 |
+| `registry.list/login/logout` `images.tag` `images.push`                               | Registries                               |
+| `containers.exited`                                                                   | Pushed when a container stops by itself  |
 | `system.kernelConfigured` `system.installKernel`                                      | The Linux kernel containers run on       |
 | `images.builderStatus` `images.startBuilder`                                          | The buildkit container builds run in     |
 | `volumes.*` `networks.*`                                                              | List, create, delete                     |
@@ -198,6 +209,19 @@ sequenceDiagram
 | `terminal.open/input/resize` `stream.cancel`                                          | pty sessions, base64 payloads            |
 
 ## Behaviour worth knowing
+
+**Browsing a container needs a shell in it.** Apple's CLI cannot read a container's filesystem, so
+Dermaga runs `ls` inside the container and reads what it prints. An image built `FROM scratch` has
+no `ls`, and says so rather than pretending to be empty.
+
+**Local registries speak plain HTTP.** A registry on this machine has no TLS, and the CLI told to
+use HTTPS anyway fails with `-9836: bad protocol version` — sometimes after a push has reached 100%.
+Pull, push and login default to plain HTTP for `localhost` and friends; the checkbox is there to
+disagree with.
+
+**Notifications need a signature.** macOS accepts them only from apps signed with a Developer ID and
+drops the rest without a word, so on these builds the message in the window and the sound are what
+actually arrive.
 
 **Scanning is ambient, and cached.** Images are scanned when they appear, not when you ask, so the
 answer is usually waiting by the time you open one. Results live in `~/.dermaga/scans.json` and are

@@ -1,6 +1,9 @@
 import {
   ArrowDownToLine,
+  BellRing,
   Boxes,
+  CloudUpload,
+  FolderTree,
   Hammer,
   Keyboard,
   Pencil,
@@ -101,6 +104,33 @@ export function HelpView({ version }: { version: string }) {
               replaced. <strong>No Linux kernel</strong> there means containers cannot run at all --
               Dermaga installs one on first launch, and if that could not finish the warning stays,
               with the command to run by hand.
+            </p>
+          </Card>
+
+          <Card icon={FolderTree} title="Files in a container">
+            <p>
+              The <strong>Files</strong> tab browses a running container and moves things both ways:
+              drop from Finder to copy in, drag a file out to take it. Browsing runs{' '}
+              <code className="font-mono">ls</code> inside the container, so an image built from
+              scratch has nothing to browse with and says so.
+            </p>
+          </Card>
+
+          <Card icon={CloudUpload} title="Registries">
+            <p>
+              Sign in under <strong>Registries</strong>, then push from an image&rsquo;s page; it is
+              tagged for the destination first if the name differs. Credentials go to Apple&rsquo;s
+              CLI over stdin and are never held here. A registry on this machine has no TLS, so{' '}
+              <strong>Plain HTTP</strong> is set for you when the address is local.
+            </p>
+          </Card>
+
+          <Card icon={BellRing} title="When a container dies">
+            <p>
+              A container that stops without being asked to is reported — in the window, and as a
+              sound when the window is not what you are looking at. A stop you asked for stays
+              quiet. macOS notifications need an app signed with a Developer ID, so on these builds
+              they are attempted but rarely arrive; nothing is lost when they do not.
             </p>
           </Card>
 

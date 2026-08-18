@@ -55,6 +55,13 @@ See the architecture section in the [README](README.md#architecture). In short:
   the status bar, not behind a spinner the user has to sit and watch. The
   scanner is the model: it installs itself, fetches its database and scans on
   its own goroutine, and reports where it has got to.
+- A pane that should fill its page needs `flex-1` the whole way up, not only
+  where the content is. A layout that is merely as tall as its content leaves
+  empty states stuck to the top and drop targets ending halfway down, and both
+  read as unrelated bugs.
+- Registries on this machine have no TLS. Anything that talks to one -- pull,
+  push, login -- defaults to plain HTTP for `localhost` and friends, because the
+  failure otherwise is `-9836: bad protocol version`, which explains nothing.
 
 ## Commits
 
