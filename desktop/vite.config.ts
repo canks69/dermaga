@@ -18,7 +18,10 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    strictPort: false,
+    // Electron loads localhost:3000 and the dev script waits on it, so a Vite
+    // that quietly moved to the next free port would leave the window pointing
+    // at nothing. Fail loudly instead, and say which port is taken.
+    strictPort: true,
     // The shared assets directory sits above this project root.
     fs: { allow: ['..'] },
   },

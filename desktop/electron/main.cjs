@@ -51,6 +51,7 @@ function placeOn(width, height) {
 // Streams the startup sequence is listening to, keyed by stream id.
 const streamListeners = new Map();
 
+
 /** Runs a streaming agent method to completion, reporting each line. */
 function runStream(method, params, onLine) {
   return new Promise((resolve, reject) => {
@@ -101,7 +102,13 @@ function createSplash() {
     },
   });
 
-  splashWindow.once('ready-to-show', () => splashWindow?.show());
+  splashWindow.once('ready-to-show', () => {
+    splashWindow?.show();
+    // Launched from a terminal rather than Finder, macOS leaves the app behind
+    // whatever was in front -- so the splash runs its whole sequence unseen.
+    splashWindow?.focus();
+    app.focus({ steal: true });
+  });
   void splashWindow.loadFile(path.join(__dirname, 'splash.html'));
 
   splashWindow.on('closed', () => {
@@ -479,6 +486,7 @@ async function startUp() {
 
   closeSplash();
   mainWindow?.show();
+  mainWindow?.focus();
 }
 
 app.whenReady().then(() => {

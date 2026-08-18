@@ -1,11 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { FolderCog, Monitor, Moon, Radio, Server, Sun } from 'lucide-react';
+import { type ReactNode } from 'react';
+import { Monitor, Moon, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { ConnectionState } from '../hooks/useEventStream';
 import { useSettingsStore, type Theme } from '../store/settingsStore';
-import type { SystemStatus } from '../types';
-import { api } from '../services/api';
-import { Row } from './DetailRow';
 import { SegmentedControl, type Segment } from './SegmentedControl';
 
 const THEMES: Segment<Theme>[] = [
@@ -14,31 +10,8 @@ const THEMES: Segment<Theme>[] = [
   { value: 'system', label: 'System', icon: Monitor },
 ];
 
-const CONNECTION_LABEL: Record<ConnectionState, string> = {
-  connecting: 'connecting',
-  live: 'live — updates are pushed',
-  disconnected: 'disconnected',
-};
-
-interface SettingsPanelProps {
-  system: SystemStatus | null;
-  connection: ConnectionState;
-}
-
-export function SettingsPanel({ system, connection }: SettingsPanelProps) {
+export function SettingsPanel() {
   const settings = useSettingsStore();
-  const [configPath, setConfigPath] = useState('~/.dermaga/config.json');
-
-  // The server reports where it actually wrote the file.
-  useEffect(() => {
-    void api
-      .getSettings()
-      .then(({ path }) => path && setConfigPath(path))
-      .catch(() => {
-        // Keep the documented default if the agent cannot be reached.
-      });
-  }, []);
-
   return (
     <div className="-mr-5 min-h-0 flex-1 overflow-y-auto pr-5">
       {/* Centred and column-limited: a wide window should not leave the
@@ -87,28 +60,6 @@ export function SettingsPanel({ system, connection }: SettingsPanelProps) {
               onChange={settings.setConfirmDestructive}
               label="Ask before removing a container"
             />
-          </Card>
-
-          <Card
-            title="Connection"
-            icon={Radio}
-            hint="The renderer talks to a local agent over IPC; there is no network involved."
-          >
-            <Row label="Transport" value="JSON-RPC over stdio" />
-            <Row label="Updates" value={CONNECTION_LABEL[connection]} />
-          </Card>
-
-          <Card title="Runtime" icon={Server}>
-            <Row label="Apple Container CLI" value={system?.cliVersion} />
-            <Row label="API server" value={system?.apiServerVersion} />
-          </Card>
-
-          <Card
-            title="Storage"
-            icon={FolderCog}
-            hint="Preferences are a plain JSON file you can edit or version-control."
-          >
-            <Row label="Config file" value={configPath} mono copyable />
           </Card>
         </div>
       </div>
