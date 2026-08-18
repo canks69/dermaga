@@ -27,15 +27,20 @@ everything you do is immediately visible to `container ls` and vice versa.
   container: live CPU and memory, IPv4/IPv6, gateway, MAC, MTU, DNS, mounts, environment,
   capabilities and runtime flags.
 - **Terminal** — a real shell in any running container or machine, backed by a pty, with a prompt,
-  line editing, colours and resize.
+  line editing, colours and resize. Open it as the image's own user, as root, or as anyone else.
 - **Logs** — follow container, machine and service logs, with filtering and follow-on-scroll.
 - **Images** — build from a Dockerfile with live progress, pull, inspect layers, build history and
   the config a container inherits. Tags sharing a digest are shown as one image.
+- **Vulnerabilities** — every image is scanned in the background and the counts appear beside it in
+  the list. Per image: the CVEs, the package each one is in, and the version that fixes it. Runs
+  entirely on your Mac; nothing about your images is sent anywhere.
 - **Volumes and networks** — create and delete, and see which containers depend on them.
 - **Machines** — create, boot, stop, resize (CPU, memory, home mount) and delete the Linux VMs.
 - **System** — start and stop the background services, read their logs, and reclaim disk space.
 - **Live by default** — no refresh button anywhere. Changes made in a terminal appear within two
   seconds; changes made in Dermaga appear immediately.
+- **Updates itself** — when a newer release exists the status bar says so; one click downloads it,
+  opens the installer and stands aside.
 
 ## Install
 
@@ -76,12 +81,22 @@ The splash screen is a bootstrap, not a progress bar. It runs five checks and fi
    nothing further can succeed
 3. **Checking the container CLI** — installs it with `brew install container` if absent, showing the
    live progress
-4. **Checking container services** — starts them if they are down
+4. **Checking container services** — starts them, and installs the default Linux kernel if this Mac
+   has none
 5. **Loading your containers**
 
-Anything it cannot fix is reported there rather than dropped into an empty window. Kernel
-installation stays opt-in: if the services fail to start because a kernel is missing, the app opens
-on a screen that asks properly.
+Anything it cannot fix is reported there rather than dropped into an empty window.
+
+The kernel deserves a note: the services start perfectly well without one, and the failure only
+surfaces later as *"default kernel not configured for architecture arm64"* when something tries to
+run. Dermaga asks directly instead of waiting to be told, and installs it — 569 MB from GitHub, so
+on a slow line it takes a while. The splash waits as long as the download keeps moving; if it stops
+entirely the window opens anyway and the status bar keeps the reminder, with the command to run by
+hand.
+
+The vulnerability scanner sets itself up separately, in the background: Trivy through Homebrew, then
+its database. That never holds up the window — you can work while it happens, and the status bar
+reports where it has got to.
 
 ## Usage
 
@@ -129,6 +144,7 @@ cmd/dermaga-agent/   entrypoint: JSON-RPC on stdio
 internal/cli/        runs `container`; the only package that touches os/exec
 internal/containers/ list, lifecycle, spec, live stats
 internal/images/     list, inspect, build, pull, delete, prune
+internal/scanner/    Trivy: install, database, background scans, stored results
 internal/volumes/    ·  internal/networks/  ·  internal/machines/
 internal/system/     services and disk usage
 internal/settings/   ~/.dermaga/config.json
@@ -172,6 +188,8 @@ sequenceDiagram
 | `settings.get` `settings.save`                                                        | Preferences on disk                      |
 | `containers.list/get/spec/start/stop/remove/update`                                   | Lifecycle                                |
 | `images.list/inspect/delete/prune`                                                    | Images                                   |
+| `scanner.status` `scanner.scan` `scanner.report` `scanner.reports` `scanner.clear`    | Vulnerabilities, pushed as they finish   |
+| `system.kernelConfigured` `system.installKernel`                                      | The Linux kernel containers run on       |
 | `images.builderStatus` `images.startBuilder`                                          | The buildkit container builds run in     |
 | `volumes.*` `networks.*`                                                              | List, create, delete                     |
 | `machines.list/get/start/stop/delete/setDefault/configure`                            | Machine lifecycle                        |
@@ -180,6 +198,17 @@ sequenceDiagram
 | `terminal.open/input/resize` `stream.cancel`                                          | pty sessions, base64 payloads            |
 
 ## Behaviour worth knowing
+
+**Scanning is ambient, and cached.** Images are scanned when they appear, not when you ask, so the
+answer is usually waiting by the time you open one. Results live in `~/.dermaga/scans.json` and are
+rescanned when the vulnerability database turns over, when Trivy is upgraded, when a tag moves to a
+different digest, or after a week — whichever comes first. Tags sharing a digest share one scan.
+Results for images you have deleted are cleared automatically; nothing else is.
+
+**A pull is not finished when the image appears.** The runtime registers an image while its layers
+are still unpacking, and scanning it then finds an image that is not all there — which reads as "no
+vulnerabilities". Sweeps wait for changes to settle, and any result that found nothing is checked
+again before it is believed.
 
 **Editing a container recreates it.** Apple's CLI has no `update` verb, so saving the edit form
 stops, deletes and re-runs the container with the new spec. Named volumes survive; the container

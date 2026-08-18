@@ -16,7 +16,13 @@ misbehaves in Dermaga, try it in a terminal first.
 ```bash
 make check    # go vet, go test, tsc, eslint
 make fmt      # gofmt + prettier
+make notes VERSION=x.y.z   # what the release notes would say
 ```
+
+Changes to the window are worth running: `make dev` builds the agent and starts
+Vite and Electron together. Note that Vite's port is pinned -- if 3000 is busy
+it stops rather than moving, because Electron loads that address and a silent
+move means a blank window.
 
 ## Layout
 
@@ -24,7 +30,8 @@ See the architecture section in the [README](README.md#architecture). In short:
 
 - `cmd/dermaga-agent` — the Go process; speaks JSON-RPC on stdio
 - `internal/…` — one package per domain, none of which import each other's
-  transports
+  transports; `internal/scanner` also owns its own background worker and the
+  results it keeps in `~/.dermaga`
 - `desktop/electron` — the Electron shell, which spawns the agent
 - `desktop/src` — the React renderer, which has no network access of its own
 
@@ -36,6 +43,18 @@ See the architecture section in the [README](README.md#architecture). In short:
 - Adding an operation means: a method on the domain manager, then a case in
   `internal/agent`, then a call in `desktop/src/services/api.ts`.
 - Anything long-running is a stream, so the UI can show progress and cancel it.
+- Some of Apple's CLI refuses to work without a terminal: `container exec -it`
+  and `container system kernel set` both hang on a plain pipe, printing nothing
+  and exiting never. Run those through `streams.runCommandTTY`, which gives them
+  a pty, splits output on carriage returns and strips the escape codes a
+  progress bar draws with.
+- Never decide a command failed by looking for "error" in its output. Build logs
+  are full of it -- `liberror-perl`, `libgpg-error0` -- and the exit status is
+  the truth. Anchored markers are a fallback, not the rule.
+- Work that takes more than a moment belongs in the background with a line in
+  the status bar, not behind a spinner the user has to sit and watch. The
+  scanner is the model: it installs itself, fetches its database and scans on
+  its own goroutine, and reports where it has got to.
 
 ## Commits
 
