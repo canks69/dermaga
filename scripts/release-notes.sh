@@ -10,13 +10,20 @@ set -eu
 
 tag="${1:?usage: release-notes.sh <tag>}"
 
-# The tag before this one, if there is one; otherwise start from the first
-# commit so an initial release still lists its history.
-prev=$(git describe --tags --abbrev=0 "$tag^" 2>/dev/null || true)
-if [ -n "$prev" ]; then
-	range="$prev..$tag"
+# Works before the tag exists, so the notes can be read before cutting the
+# release they describe: an unknown tag means "everything since the last one".
+if git rev-parse -q --verify "$tag^{commit}" >/dev/null 2>&1; then
+	head="$tag"
+	prev=$(git describe --tags --abbrev=0 "$tag^" 2>/dev/null || true)
 else
-	range="$tag"
+	head="HEAD"
+	prev=$(git describe --tags --abbrev=0 2>/dev/null || true)
+fi
+
+if [ -n "$prev" ]; then
+	range="$prev..$head"
+else
+	range="$head"
 fi
 
 # One `hash<tab>subject` per line, newest first, merges left out.
