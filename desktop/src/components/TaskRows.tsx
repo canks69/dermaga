@@ -110,6 +110,11 @@ export function TaskRows({ kind }: { kind: TaskKind }) {
   );
 }
 
+// Anchored deliberately: "ERROR:" or "Error:" as a word, buildkit's own
+// "failed to solve", or a line that begins with either. Anything laxer matches
+// ordinary build chatter.
+const FAILURE = /(^|\s)(ERROR|Error):\s|(^|\s)failed to solve|^\s*(ERROR|FATAL)\b/;
+
 /**
  * Runs a streaming agent method as a task: progress lands in the list, and the
  * caller never sees a log window unless it fails.
@@ -137,9 +142,12 @@ export async function runTask({
       onData: (line) => append(id, line),
       onEnd: (error) => {
         const task = useTaskStore.getState().tasks.find((t) => t.id === id);
-        // The CLI reports failures in its output rather than as an exit code
-        // it can pass back, so scan what it said.
-        const problem = error ?? task?.lines.find((line) => /error|failed|not found/i.test(line));
+        // The exit status is the truth. Output is only consulted when the
+        // command somehow succeeded while saying it failed -- and then only
+        // against anchored markers: a build log is full of the word "error"
+        // in package names (liberror-perl) and library paths, and matching
+        // those failed builds that had worked perfectly.
+        const problem = error ?? task?.lines.find((line) => FAILURE.test(line));
 
         if (problem) {
           fail(id, problem.trim().slice(0, 160));
