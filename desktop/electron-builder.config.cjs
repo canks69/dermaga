@@ -29,7 +29,9 @@ module.exports = {
 
   // The whole point of the DMG: the agent is inside it, so installing the app
   // installs everything Dermaga needs.
-  extraResources: [{ from: '../bin/dermaga-agent', to: 'dermaga-agent' }],
+  extraResources: [
+    { from: '../bin/dermaga-agent', to: 'dermaga-agent' },
+  ],
 
   mac: {
     category: 'public.app-category.developer-tools',

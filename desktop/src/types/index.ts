@@ -364,4 +364,5 @@ export type Route =
   | { name: 'machine'; id: string; tab: MachineTab }
   | { name: 'system' }
   | { name: 'settings' }
-  | { name: 'help' };
+  | { name: 'help' }
+  | { name: 'licences' };

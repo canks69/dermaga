@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { HelpView } from './components/HelpView';
+import { LicencesPage } from './pages/LicencesPage';
 import { SettingsPanel } from './components/SettingsPanel';
 import { Sidebar } from './components/Sidebar';
 import { StatusBar } from './components/StatusBar';
@@ -166,6 +167,8 @@ export function App() {
             {route.name === 'settings' && <SettingsPanel />}
 
             {route.name === 'help' && <HelpView version={build?.version ?? APP_VERSION} />}
+
+            {route.name === 'licences' && <LicencesPage />}
           </main>
         </div>
       </div>

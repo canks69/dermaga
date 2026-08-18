@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld('dermaga', {
   // Returns the chosen path, or null if the dialog was dismissed.
   pickDirectory: (title) => ipcRenderer.invoke('dermaga:pick-directory', title),
 
+  // Fetches a licence that is too large to ship, by key rather than by URL.
+  fetchLicence: (key) => ipcRenderer.invoke('dermaga:fetch-licence', key),
+
   checkUpdate: () => ipcRenderer.invoke('dermaga:check-update'),
   downloadUpdate: (assetUrl, version) =>
     ipcRenderer.invoke('dermaga:download-update', assetUrl, version),

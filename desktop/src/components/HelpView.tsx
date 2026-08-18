@@ -1,4 +1,14 @@
-import { Boxes, Keyboard, Pencil, Radio, Server, Terminal } from 'lucide-react';
+import {
+  ArrowDownToLine,
+  Boxes,
+  Hammer,
+  Keyboard,
+  Pencil,
+  Radio,
+  Server,
+  ShieldCheck,
+  Terminal,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
@@ -44,7 +54,8 @@ export function HelpView({ version }: { version: string }) {
               Each running container gets a real shell: the server attaches{' '}
               <code className="font-mono">container exec</code> to a pty, so you get a prompt, line
               editing, colours and resize. It prefers <code className="font-mono">bash</code> and
-              falls back to <code className="font-mono">sh</code>.
+              falls back to <code className="font-mono">sh</code>. <strong>Run as</strong> opens it
+              as the image&rsquo;s own user, as root, or as anyone else.
             </p>
           </Card>
 
@@ -52,7 +63,9 @@ export function HelpView({ version }: { version: string }) {
             <p>
               Apple&rsquo;s CLI has no update command, so saving the edit form stops, deletes and
               re-runs the container with the new spec. Named volumes survive; the container
-              filesystem does not. A failed change rolls back to the previous container.
+              filesystem does not. A failed change rolls back to the previous container. Environment
+              variables can be edited as fields or pasted in as{' '}
+              <code className="font-mono">.env</code> text.
             </p>
           </Card>
 
@@ -61,6 +74,33 @@ export function HelpView({ version }: { version: string }) {
               Check <strong>System</strong>. If the container services are stopped, nothing can
               start until they are back up — you can start them there, watch their logs, and reclaim
               disk space from unused images, containers and volumes.
+            </p>
+          </Card>
+
+          <Card icon={ShieldCheck} title="Vulnerabilities">
+            <p>
+              Images are scanned in the background as they appear, so the counts are usually waiting
+              by the time you open one. Results are kept between launches and refreshed when the
+              vulnerability database changes, when a tag moves to a new digest, or after a week.
+              Everything runs on this Mac; nothing about your images leaves it.
+            </p>
+          </Card>
+
+          <Card icon={Hammer} title="Building images">
+            <p>
+              <strong>Build</strong> on the Images page takes a context folder, a tag and the usual
+              build arguments. Progress appears as a row in the list rather than a log window, and
+              the builder container is started for you the first time.
+            </p>
+          </Card>
+
+          <Card icon={ArrowDownToLine} title="Staying current">
+            <p>
+              The bottom-right corner says which version is running, and speaks up when a newer one
+              exists: one click downloads it, opens the installer and closes Dermaga so it can be
+              replaced. <strong>No Linux kernel</strong> there means containers cannot run at all --
+              Dermaga installs one on first launch, and if that could not finish the warning stays,
+              with the command to run by hand.
             </p>
           </Card>
 

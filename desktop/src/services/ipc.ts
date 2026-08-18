@@ -17,6 +17,7 @@ interface Bridge {
   isFullScreen?: () => Promise<boolean>;
   onFullScreenChange?: (callback: (value: boolean) => void) => () => void;
   pickDirectory?: (title?: string) => Promise<string | null>;
+  fetchLicence?: (key: string) => Promise<string>;
   checkUpdate?: () => Promise<UpdateCheck>;
   downloadUpdate?: (assetUrl: string, version: string) => Promise<string>;
   installUpdate?: (dmgPath: string) => Promise<void>;
@@ -64,6 +65,13 @@ export function onNotify(callback: (message: Notification) => void): () => void 
 /** Opens the native folder chooser; null if the user dismissed it. */
 export function pickDirectory(title?: string): Promise<string | null> {
   return bridge().pickDirectory?.(title) ?? Promise.resolve(null);
+}
+
+/** Reads a licence from its source, for the ones too large to ship. */
+export function fetchLicence(key: string): Promise<string> {
+  const fetchIt = bridge().fetchLicence;
+  if (!fetchIt) return Promise.reject(new Error('Only the desktop app can fetch this'));
+  return fetchIt(key);
 }
 
 export const updates = {

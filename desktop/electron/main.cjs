@@ -424,7 +424,24 @@ ipcMain.handle('dermaga:pick-directory', async (_event, title) => {
   return result.canceled ? null : (result.filePaths[0] ?? null);
 });
 
-ipcMain.handle('splash:version', () => app.getVersion());
+// Licences too large to ship are read from source when someone asks to see
+// them. The renderer has no network of its own, and this is not a general
+// fetch: only these addresses can be asked for, so a compromised window cannot
+// turn it into one.
+const LICENCE_SOURCES = {
+  chromium: 'https://raw.githubusercontent.com/chromium/chromium/main/LICENSE',
+  node: 'https://raw.githubusercontent.com/nodejs/node/main/LICENSE',
+};
+
+ipcMain.handle('dermaga:fetch-licence', async (_event, key) => {
+  const url = LICENCE_SOURCES[key];
+  if (!url) throw new Error('Unknown licence');
+
+  const response = await fetch(url, { headers: { Accept: 'text/plain' } });
+  if (!response.ok) throw new Error(`Source answered ${response.status}`);
+
+  return response.text();
+});
 
 ipcMain.on('splash:quit', () => app.quit());
 

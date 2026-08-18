@@ -2,6 +2,7 @@ import {
   Boxes,
   ChevronsLeft,
   CircleHelp,
+  Scale,
   Cpu,
   Database,
   Layers,
@@ -44,6 +45,7 @@ const PRIMARY_NAV: NavEntry[] = [
 const SECONDARY_NAV: NavEntry[] = [
   { target: { name: 'settings' }, owns: ['settings'], icon: Settings, label: 'Settings' },
   { target: { name: 'help' }, owns: ['help'], icon: CircleHelp, label: 'Help' },
+  { target: { name: 'licences' }, owns: ['licences'], icon: Scale, label: 'Licences' },
 ];
 
 export function Sidebar() {
