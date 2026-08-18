@@ -1,10 +1,21 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Play, Plus, Square, Trash2 } from 'lucide-react';
+import { Button } from '../components/Button';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { CreateMachineDialog } from '../components/MachineForm';
 import { TaskRows } from '../components/TaskRows';
-import { Badge, DataTable, Muted, NameCell, type Column } from '../components/DataTable';
+import {
+  Badge,
+  DataTable,
+  Muted,
+  NameCell,
+  SelectionActions,
+  type Column,
+} from '../components/DataTable';
 import { StatusDot } from '../components/StatusBadge';
+import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
+import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
 import { useUIStore } from '../store/uiStore';
 import { formatBytes, formatDuration, formatMemory } from '../utils/format';
@@ -26,6 +37,41 @@ export function MachinesPage({ runtimeMissing }: { runtimeMissing: boolean }) {
   const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const openMachine = useUIStore((s) => s.openMachine);
   const [creating, setCreating] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const pushToast = useToastStore((s) => s.push);
+
+  const chosen = machines.filter((machine) => selected.has(machine.id));
+  const startable = chosen.filter((machine) => machine.status !== 'running');
+  const stoppable = chosen.filter((machine) => machine.status === 'running');
+  // A running machine cannot be deleted, and the default one is what every
+  // container falls back to, so neither is offered.
+  const deletable = chosen.filter((machine) => machine.status !== 'running' && !machine.default);
+
+  const applyToSelection = async (
+    verb: string,
+    targets: typeof machines,
+    work: (machine: (typeof machines)[number]) => Promise<void>
+  ) => {
+    setBusy(verb);
+    const failed: string[] = [];
+
+    for (const machine of targets) {
+      try {
+        await work(machine);
+      } catch {
+        failed.push(machine.id);
+      }
+    }
+
+    setBusy(null);
+    setSelected(new Set());
+
+    if (failed.length > 0)
+      pushToast(`Could not ${verb.replace(/ed$/, '')} ${failed.join(', ')}`, 'error');
+    else pushToast(`${targets.length} machine${targets.length === 1 ? '' : 's'} ${verb}`);
+  };
 
   const needle = searchQuery.trim().toLowerCase();
   const visible = machines.filter(
@@ -47,10 +93,47 @@ export function MachinesPage({ runtimeMissing }: { runtimeMissing: boolean }) {
         subtitle="The Linux VMs your containers run inside"
         search={{ value: searchQuery, onChange: setSearchQuery, placeholder: 'Search machines…' }}
         actions={
-          <button onClick={() => setCreating(true)} className="btn-primary">
-            <Plus size={13} aria-hidden />
-            New machine
-          </button>
+          selected.size > 0 ? (
+            <SelectionActions count={selected.size} onClear={() => setSelected(new Set())}>
+              <Button
+                icon={Play}
+                busy={busy === 'started'}
+                busyLabel="Starting…"
+                disabled={Boolean(busy) || startable.length === 0}
+                onClick={() =>
+                  void applyToSelection('started', startable, (m) => api.startMachine(m.id))
+                }
+              >
+                Start
+              </Button>
+              <Button
+                icon={Square}
+                busy={busy === 'stopped'}
+                busyLabel="Stopping…"
+                disabled={Boolean(busy) || stoppable.length === 0}
+                onClick={() =>
+                  void applyToSelection('stopped', stoppable, (m) => api.stopMachine(m.id))
+                }
+              >
+                Stop
+              </Button>
+              <Button
+                icon={Trash2}
+                busy={busy === 'deleted'}
+                busyLabel="Deleting…"
+                disabled={Boolean(busy) || deletable.length === 0}
+                className="text-orange-700 dark:text-orange-500"
+                onClick={() => setConfirmingDelete(true)}
+              >
+                Delete
+              </Button>
+            </SelectionActions>
+          ) : (
+            <button onClick={() => setCreating(true)} className="btn-primary">
+              <Plus size={13} aria-hidden />
+              New machine
+            </button>
+          )
         }
       />
 
@@ -61,6 +144,7 @@ export function MachinesPage({ runtimeMissing }: { runtimeMissing: boolean }) {
         rows={visible}
         rowKey={(machine) => machine.id}
         onOpen={(machine) => openMachine(machine.id)}
+        selection={{ selected, onChange: setSelected }}
         empty={emptyMessage}
         cells={(machine) => [
           <NameCell key="name">
@@ -82,6 +166,19 @@ export function MachinesPage({ runtimeMissing }: { runtimeMissing: boolean }) {
       />
 
       {creating && <CreateMachineDialog onClose={() => setCreating(false)} />}
+
+      {confirmingDelete && (
+        <ConfirmDialog
+          title={`Delete ${deletable.length} machine${deletable.length === 1 ? '' : 's'}?`}
+          body="Everything inside them goes with them. Running machines and the default machine are left alone."
+          confirmLabel="Delete"
+          onConfirm={() => {
+            setConfirmingDelete(false);
+            void applyToSelection('deleted', deletable, (m) => api.deleteMachine(m.id));
+          }}
+          onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
     </div>
   );
 }
