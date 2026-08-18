@@ -110,11 +110,15 @@ type Report struct {
 	ScannerVersion string `json:"scannerVersion,omitempty"`
 	// The image the result belongs to. A tag that has since moved to a new
 	// digest means the stored report describes something else.
-	Digest    string         `json:"digest,omitempty"`
-	ScannedAt string         `json:"scannedAt"`
-	OS        string         `json:"os,omitempty"`
-	Summary   map[string]int `json:"summary"`
-	Findings  []Finding      `json:"findings"`
+	Digest    string `json:"digest,omitempty"`
+	ScannedAt string `json:"scannedAt"`
+	OS        string `json:"os,omitempty"`
+	// How many things Trivy managed to analyse -- an OS package list, a
+	// language lockfile. Zero means it read nothing at all, which is what a
+	// half-unpacked image looks like; it is not the same as finding nothing.
+	Targets  int            `json:"targets"`
+	Summary  map[string]int `json:"summary"`
+	Findings []Finding      `json:"findings"`
 }
 
 type Manager struct {
@@ -492,6 +496,8 @@ func parseReport(reference string, out []byte) (Report, error) {
 	if family := raw.Metadata.OS.Family; family != "" {
 		report.OS = strings.TrimSpace(family + " " + raw.Metadata.OS.Name)
 	}
+
+	report.Targets = len(raw.Results)
 
 	for _, result := range raw.Results {
 		for _, v := range result.Vulnerabilities {
