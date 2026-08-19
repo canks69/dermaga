@@ -1,7 +1,7 @@
 {
   "name": "dermaga-desktop",
   "productName": "Dermaga",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Dermaga desktop app: Electron shell and React renderer",
   "author": "ryanbekhen",
   "license": "MIT",
