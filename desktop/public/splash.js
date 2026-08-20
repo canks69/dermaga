@@ -5,6 +5,11 @@
 // `default-src 'self'`, and that blocks inline scripts. The splash sat there
 // showing its first frame -- "Starting...", no version, no steps -- with no
 // error anywhere the user would see.
+//
+// It listens to the same events the window does, through the runtime it
+// imports for itself.
+const { Events, Call } = await import('/wails/runtime.js');
+
 // The bootstrap, in order. Only one is ever shown at a time -- a list of
   // five ticks is a progress bar with extra steps, and this reads as calmer.
   const STEPS = [
@@ -30,7 +35,7 @@
   const badge = document.getElementById('version');
   if (version && badge) badge.textContent = `v${version}`;
 
-  window.splash?.onStep(({ id, state, label }) => {
+  Events.On('splash:step', ({ data: { id, state, label } }) => {
     if (!labels.has(id)) return;
 
     if (state === 'done') done.add(id);
@@ -43,16 +48,18 @@
     bar.style.width = `${(done.size / STEPS.length) * 100}%`;
   });
 
-  window.splash?.onSetup(({ title, line, done: finished }) => {
+  Events.On('splash:setup', ({ data: { title, line, done: finished } }) => {
     setup.classList.toggle('on', !finished);
     if (title) setupTitle.textContent = title;
     if (line) setupLine.textContent = line;
   });
 
-  window.splash?.onFatal(({ title, detail }) => {
+  Events.On('splash:fatal', ({ data: { title, detail } }) => {
     document.body.dataset.fatal = 'true';
     document.getElementById('fatal-title').textContent = title;
     document.getElementById('fatal-detail').textContent = detail;
   });
 
-  document.getElementById('quit').addEventListener('click', () => window.splash?.quit());
+  document.getElementById('quit').addEventListener('click', () => {
+    void Call.ByName('main.Bridge.Quit');
+  });

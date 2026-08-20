@@ -17,6 +17,16 @@
     height: 100%;
   }
 
+  /* WebKit bounces the document itself: a scroll that runs past the end drags
+     the whole window down and springs back, taking the title bar strip with it.
+     Nothing here is a document -- every pane scrolls inside itself -- so the
+     page is pinned and the elastic goes with it. */
+  html,
+  body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   body {
     font-family: theme('fontFamily.sans');
     -webkit-font-smoothing: antialiased;
@@ -34,9 +44,11 @@
     user-select: text;
   }
 
-  /* Electron window dragging: chrome moves the window, controls do not. */
+  /* Window dragging: chrome moves the window, controls do not.
+     The property inherits, so the controls have to say no for themselves or a
+     click on one drags the window instead of pressing it. */
   .drag {
-    -webkit-app-region: drag;
+    --wails-draggable: drag;
   }
 
   .no-drag,
@@ -44,7 +56,7 @@
   input,
   select,
   a {
-    -webkit-app-region: no-drag;
+    --wails-draggable: no-drag;
   }
 
   /* Overlay scrollbars, the way a native list scrolls. */
@@ -53,25 +65,43 @@
     height: 10px;
   }
 
-  ::-webkit-scrollbar-thumb {
-    @apply rounded-full border-3 border-solid border-transparent bg-clip-padding;
-  }
+  /* The bar is thinner than the track it sits in: a transparent border with
+     the background clipped to the padding box leaves a gap on either side, so
+     it does not press against the content it scrolls. */
 
   ::-webkit-scrollbar-track {
     background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-ink-300 dark:bg-ink-700;
+    @apply rounded-full border-3 border-solid border-transparent bg-ink-300 bg-clip-padding dark:bg-ink-700;
   }
 
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-ink-400 dark:bg-ink-600;
   }
 
+  /* An outline rather than a ring.
+     Tailwind's ring is a box-shadow, and WebKit will not paint a box-shadow on
+     a natively drawn control: a checkbox or a radio took the ring and showed
+     nothing at all, leaving someone tabbing through a form with no idea where
+     they were. An outline is drawn by the engine around the element instead of
+     by the control's own theme, so every control gets one -- and it follows
+     the border radius, so it looks like the ring it replaces. */
   :focus-visible {
-    @apply outline-hidden ring-2 ring-brand-600/40;
+    @apply outline-2 outline-offset-2 outline-brand-600/60;
   }
+}
+
+/* A file being dragged over a drop target.
+
+   Wails catches the drag before the page ever sees it, and says so by putting
+   this class on the target rather than by firing a DOM event.
+
+   Deliberately outside @layer: the overlay is kept away by Tailwind's `hidden`,
+   and a layered rule loses to a utility however specific it is. */
+.drop-target.file-drop-target-active .drop-overlay {
+  display: flex;
 }
 
 /* Declared as utilities, not components: Tailwind 4 only lets @apply reference

@@ -9,7 +9,8 @@
 VERSION ?= $(patsubst v%,%,$(shell git describe --tags --abbrev=0 2>/dev/null || echo 0.0.0))
 COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 DATE    := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-DMG     := desktop/release/Dermaga-$(VERSION)-arm64.dmg
+DMG     := dist/Dermaga-$(VERSION)-arm64.dmg
+APP     := dist/Dermaga.app
 
 AGENT   := bin/dermaga-agent
 LDFLAGS := -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildDate=$(DATE)
@@ -24,13 +25,13 @@ agent:
 
 ## Derive the app icon from the one checked-in logo, so it is never a
 ## second copy that can drift.
-icon: desktop/build/icon.png desktop/electron/splash-logo.png
+icon: build/icon.png desktop/public/splash-logo.png
 
-desktop/build/icon.png: assets/logo.png
-	@mkdir -p desktop/build
+build/icon.png: assets/logo.png
+	@mkdir -p build
 	sips -z 1024 1024 $< --out $@ >/dev/null
 
-desktop/electron/splash-logo.png: assets/logo.png
+desktop/public/splash-logo.png: assets/logo.png
 	sips -z 256 256 $< --out $@ >/dev/null
 
 desktop-deps:
@@ -46,18 +47,33 @@ notices:
 changelog:
 	node scripts/changelog.mjs
 
-## Run Vite and Electron together, with a freshly built agent.
-dev: agent icon notices changelog
-	cd desktop && npm run dev:app
+## Run Vite and the app together, with a freshly built agent.
+##
+## Notifications need a bundle identifier, so there is no useful way to run this
+## outside a .app: the bundle is the development build as well as the shipped
+## one. What tells them apart is where it sits -- a bundle anywhere but
+## /Applications keeps to its own agent socket, so trying a build out never
+## disturbs the Dermaga you have installed.
+##
+## Ctrl-C stops both.
+dev: agent icon notices changelog internal/window/assets/dist/index.html
+	VERSION=$(VERSION) ./scripts/bundle.sh --dev
+	cd desktop && npx concurrently -k -n vite,dermaga -c cyan,magenta \
+		"npx vite" \
+		"npx wait-on tcp:127.0.0.1:3000 && FRONTEND_DEVSERVER_URL=http://localhost:3000 ../$(APP)/Contents/MacOS/Dermaga"
 
 ## Everything that has to pass: vet, tests, types, lint.
 check: test lint
 	go vet ./...
 	cd desktop && npx tsc -b --force
 
-test:
+test: internal/window/assets/dist/index.html
 	go test ./...
 	cd desktop && npm test
+
+## The Go app embeds the built frontend, so it cannot be compiled without one.
+internal/window/assets/dist/index.html:
+	cd desktop && npm run build
 
 lint:
 	gofmt -l . | tee /dev/stderr | (! read)
@@ -67,30 +83,31 @@ fmt:
 	gofmt -w .
 	cd desktop && npm run format
 
-## Package the DMG. The agent is embedded as a resource, and packaging fails
-## rather than shipping a bundle without it.
+## Package the DMG. The agent travels in the bundle, and packaging fails rather
+## than shipping one without it.
 dist: agent icon notices changelog
-	cd desktop && npm version $(VERSION) --no-git-tag-version --allow-same-version >/dev/null
-	cd desktop && npm run dist
+	cd desktop && npm run build
+	VERSION=$(VERSION) ./scripts/bundle.sh
+	VERSION=$(VERSION) ./scripts/dmg.sh
 	@$(MAKE) --no-print-directory verify-dist
 
 ## Prove the artefact is self-contained before it goes anywhere.
 verify-dist:
-	@app=desktop/release/mac-arm64/Dermaga.app; \
-	test -x "$$app/Contents/Resources/dermaga-agent" || { echo "FAIL: agent missing from bundle"; exit 1; }; \
-	test -f "$$app/Contents/Resources/icon.icns" || { echo "FAIL: icon missing"; exit 1; }; \
-	test -f "$$app/Contents/Resources/app.asar" || { echo "FAIL: app.asar missing"; exit 1; }; \
-	codesign --verify --deep "$$app" || { echo "FAIL: signature does not verify"; exit 1; }; \
-	sh scripts/check-inline-scripts.sh "$$app" || exit 1; \
-	echo "verify-dist: agent, icon, asar, signature and no inline scripts"
+	@test -x "$(APP)/Contents/MacOS/Dermaga" || { echo "FAIL: binary missing from bundle"; exit 1; }
+	@test -x "$(APP)/Contents/Resources/dermaga-agent" || { echo "FAIL: agent missing from bundle"; exit 1; }
+	@test -f "$(APP)/Contents/Resources/icons.icns" || { echo "FAIL: icon missing"; exit 1; }
+	@codesign --verify --deep "$(APP)" || { echo "FAIL: signature does not verify"; exit 1; }
+	@sh scripts/check-inline-scripts.sh internal/window/assets/dist || exit 1
+	@test -f "$(DMG)" || { echo "FAIL: no DMG at $(DMG)"; exit 1; }
+	@echo "verify-dist: binary, agent, icon, signature, no inline scripts, DMG"
 
 ## Install the built app locally, clearing the quarantine flag that Gatekeeper
 ## sets on anything downloaded.
 install: dist
 	rm -rf /Applications/Dermaga.app
-	cp -R desktop/release/mac-arm64/Dermaga.app /Applications/
+	cp -R $(APP) /Applications/
 	xattr -dr com.apple.quarantine /Applications/Dermaga.app
-	@echo "installed: /Applications/Dermaga.app" 
+	@echo "installed: /Applications/Dermaga.app"
 
 ## Cut a release: tag it, build it, publish it.
 ##
@@ -147,4 +164,4 @@ version:
 	@echo "dmg:     $(DMG)"
 
 clean:
-	rm -rf bin desktop/dist desktop/release desktop/build/icon.png desktop/electron/splash-logo.png
+	rm -rf bin dist internal/window/assets/dist build/icon.png desktop/public/splash-logo.png
