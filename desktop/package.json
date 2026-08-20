@@ -1,7 +1,7 @@
 {
   "name": "dermaga-desktop",
   "productName": "Dermaga",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "Dermaga desktop: the React window the Go app draws",
   "author": "ryanbekhen",
   "license": "MIT",
