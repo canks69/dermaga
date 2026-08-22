@@ -5,6 +5,7 @@ import {
   FolderOpen,
   Hammer,
   Play,
+  ScanSearch,
   ShieldCheck,
   Trash2,
 } from 'lucide-react';
@@ -25,6 +26,7 @@ import { TaskRows, runTask } from '../components/TaskRows';
 import { api } from '../services/api';
 import { pickDirectory } from '../services/ipc';
 import { useResourceStore } from '../store/resourceStore';
+import { SeverityStrip } from '../components/PackagesPane';
 import { useScannerStore } from '../store/scannerStore';
 import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
@@ -87,7 +89,9 @@ function groupByDigest(images: Image[]): ImageGroup[] {
 const COLUMNS: Column[] = [
   { key: 'name', label: 'Repository', width: 'minmax(160px,1.6fr)' },
   { key: 'tags', label: 'Tags', width: 'minmax(120px,1fr)' },
-  { key: 'vulnerabilities', label: 'Vulnerabilities', width: '132px' },
+  // Wide enough for all five segments of the strip, which is the same bar the
+  // image's own Packages tab is headed by.
+  { key: 'vulnerabilities', label: 'Vulnerabilities', width: '148px' },
   { key: 'digest', label: 'Digest', width: '116px' },
   { key: 'platform', label: 'Platform', width: '124px' },
   { key: 'size', label: 'Size', width: '84px', align: 'right' },
@@ -98,8 +102,6 @@ export function ImagesPage() {
   const images = useResourceStore((s) => s.images);
   const hasLoaded = useResourceStore((s) => s.hasLoaded);
   const containers = useResourceStore((s) => s.containers);
-  const searchQuery = useUIStore((s) => s.searchQuery);
-  const setSearchQuery = useUIStore((s) => s.setSearchQuery);
   const openImage = useUIStore((s) => s.openImage);
   const pushToast = useToastStore((s) => s.push);
 
@@ -108,17 +110,46 @@ export function ImagesPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [running, setRunning] = useState<string | null>(null);
 
   const groups = useMemo(() => groupByDigest(images), [images]);
 
-  const needle = searchQuery.trim().toLowerCase();
-  const visible = groups.filter(
-    (group) =>
-      !needle ||
-      group.names.some((n) => n.toLowerCase().includes(needle)) ||
-      group.tags.some((t) => t.reference.toLowerCase().includes(needle))
-  );
+  const visible = groups;
+
+  /**
+   * Queues a scan for each selected image.
+   *
+   * One reference per image rather than per tag: the tags of one image share a
+   * digest, so scanning two of them would export the same bytes twice and
+   * arrive at the same answer.
+   */
+  const scanSelected = async () => {
+    const chosen = groups.filter((group) => selected.has(group.digest));
+
+    setScanning(true);
+    const failed: string[] = [];
+
+    for (const group of chosen) {
+      const reference = group.tags[0]?.reference;
+      if (!reference) continue;
+
+      try {
+        await api.scanImage(reference);
+      } catch {
+        failed.push(reference);
+      }
+    }
+
+    setScanning(false);
+    setSelected(new Set());
+
+    if (failed.length > 0) {
+      pushToast(`Could not queue ${failed.join(', ')}`, 'error');
+    } else {
+      pushToast(`${chosen.length} image${chosen.length === 1 ? '' : 's'} queued for scanning`);
+    }
+  };
 
   const totalSize = groups.reduce((sum, g) => sum + g.sizeInBytes, 0);
 
@@ -126,16 +157,27 @@ export function ImagesPage() {
     containers.filter((c) => group.tags.some((t) => t.reference === c.image)).map((c) => c.name);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 -mb-4">
+    <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader
         title="Images"
         subtitle={`${groups.length} image${groups.length === 1 ? '' : 's'}${
           images.length !== groups.length ? ` · ${images.length} references` : ''
         } · ${formatBytes(totalSize)}`}
-        search={{ value: searchQuery, onChange: setSearchQuery, placeholder: 'Search images…' }}
         actions={
           selected.size > 0 ? (
             <SelectionActions count={selected.size} onClear={() => setSelected(new Set())}>
+              {/* Asking for a scan is asking for it next, not asking for the
+                  only one that will ever happen: the scanner works through
+                  images on its own and rescans anything older than three
+                  hours. This is for when you want an answer now. */}
+              <Button
+                icon={ScanSearch}
+                busy={scanning}
+                busyLabel="Queueing…"
+                onClick={() => void scanSelected()}
+              >
+                Scan
+              </Button>
               <Button
                 icon={Trash2}
                 busy={busy}
@@ -173,11 +215,7 @@ export function ImagesPage() {
         rowKey={(group) => group.digest}
         onOpen={(group) => openImage(group.tags[0].reference)}
         selection={{ selected, onChange: setSelected }}
-        empty={
-          images.length === 0
-            ? 'No images yet. Pull one to get started.'
-            : 'No images match your search.'
-        }
+        empty="No images yet. Pull one to get started."
         loading={!hasLoaded}
         cells={(group) => {
           const users = usersOf(group);
@@ -192,7 +230,16 @@ export function ImagesPage() {
             // width it was drawn straight across the vulnerability count
             // beside it, so the column keeps what it can and hands the rest to
             // the tooltip.
-            <div key="tags" className="flex min-w-0 flex-wrap items-center gap-1 overflow-hidden">
+            //
+            // On one line, whatever the count. Wrapping made an image with four
+            // tags twice the height of the one above it, and a list whose rows
+            // are all different heights cannot be scanned down a column -- the
+            // eye has to find each row before it can read it.
+            <div
+              key="tags"
+              title={group.tags.map(({ tag }) => tag).join(', ')}
+              className="flex min-w-0 items-center gap-1 overflow-hidden"
+            >
               {group.tags.map(({ tag }) => (
                 <Badge key={tag} fit title={tag}>
                   {tag}
@@ -258,19 +305,9 @@ export function ImagesPage() {
       {pulling.open && <PullDialog onClose={() => pulling.close()} />}
 
       {building.open && <BuildDialog onClose={() => building.close()} />}
-
     </div>
   );
 }
-
-// Counts at a glance, worst first. Only the severities that matter get colour:
-// four coloured numbers in every row would be noise rather than a signal.
-const SEVERITY_TONE: Record<string, string> = {
-  CRITICAL: 'text-brand-700 dark:text-brand-400',
-  HIGH: 'text-brand-600 dark:text-brand-400',
-  MEDIUM: 'text-amber-700 dark:text-amber-500',
-  LOW: 'text-ink-500',
-};
 
 /**
  * The severity counts for a row, from whichever of its tags has been scanned --
@@ -286,9 +323,12 @@ function VulnerabilityCell({ group }: { group: ImageGroup }) {
     return <Muted>{scanning ? 'scanning…' : '—'}</Muted>;
   }
 
-  const counts = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].filter((s) => report.summary?.[s]);
+  const total = Object.values(report.summary ?? {}).reduce((sum, count) => sum + count, 0);
 
-  if (counts.length === 0) {
+  // Clean is worth saying in words. A strip of five zeros is the same fact,
+  // but it makes the reader add up five numbers to reach the one answer they
+  // were hoping for -- and in a list of images, most rows are this one.
+  if (total === 0) {
     return (
       <span className="flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-500">
         <ShieldCheck size={12} aria-hidden />
@@ -297,19 +337,9 @@ function VulnerabilityCell({ group }: { group: ImageGroup }) {
     );
   }
 
-  return (
-    <span
-      className="flex items-center gap-1.5 text-xs tabular-nums"
-      title={counts.map((s) => `${report.summary[s]} ${s.toLowerCase()}`).join(', ')}
-    >
-      {counts.map((severity) => (
-        <span key={severity} className={`font-semibold ${SEVERITY_TONE[severity]}`}>
-          {report.summary[severity]}
-          <span className="ml-px text-tiny font-normal opacity-60">{severity[0]}</span>
-        </span>
-      ))}
-    </span>
-  );
+  // A reading, not a control: the row is what is pressed here, and the image's
+  // own page is where a severity can be filtered to.
+  return <SeverityStrip counts={report.summary ?? {}} />;
 }
 
 /**
