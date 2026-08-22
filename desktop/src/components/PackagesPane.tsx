@@ -35,38 +35,47 @@ export type Severity = (typeof ORDER)[number];
 // sort, and "worst first" is the one thing this list is for -- so the glyph
 // carries the order too. The word is still in the tooltip and for a screen
 // reader.
-const TONE: Record<Severity, { text: string; strip: string; icon: LucideIcon }> & {
-  /** What a segment with nothing in it looks like: present, and plainly empty. */
-  EMPTY: string;
-} = {
+// Each severity carries three paints: the text colour it is named in, the
+// solid segment it fills when it has something in it, and the wash that
+// segment wears when it has nothing.
+//
+// The wash is the same hue, not white. White was a hole: on a list where every
+// row sits on a tint, an empty segment disappeared into the row and the bar
+// read as a coloured fragment with its ends torn off. Kept in its own colour,
+// five segments are always five segments -- which is the only reason a bar
+// beats a row of numbers, since it is the shape of one row against the next
+// that is being read.
+const TONE: Record<Severity, { text: string; strip: string; faint: string; icon: LucideIcon }> = {
   CRITICAL: {
     text: 'text-brand-700 dark:text-brand-400',
     strip: 'bg-brand-800 text-white',
+    faint: 'bg-brand-800/15 text-brand-800/60 dark:bg-brand-400/20 dark:text-brand-200/60',
     icon: ShieldX,
   },
   HIGH: {
     text: 'text-brand-600 dark:text-brand-400',
     strip: 'bg-brand-600 text-white',
+    faint: 'bg-brand-600/12 text-brand-700/55 dark:bg-brand-400/15 dark:text-brand-200/55',
     icon: ShieldAlert,
   },
   MEDIUM: {
     text: 'text-amber-700 dark:text-amber-500',
     strip: 'bg-amber-500 text-ink-900',
+    faint: 'bg-amber-500/15 text-amber-700/60 dark:bg-amber-500/20 dark:text-amber-500/70',
     icon: ShieldHalf,
   },
   LOW: {
     text: 'text-ink-600 dark:text-ink-400',
     strip: 'bg-ink-300 text-ink-800 dark:bg-ink-600 dark:text-ink-100',
+    faint: 'bg-ink-300/40 text-ink-500 dark:bg-ink-600/30 dark:text-ink-400',
     icon: Shield,
   },
   UNKNOWN: {
     text: 'text-ink-500',
     strip: 'bg-ink-200 text-ink-700 dark:bg-ink-700 dark:text-ink-200',
+    faint: 'bg-ink-200/60 text-ink-400 dark:bg-ink-700/40 dark:text-ink-500',
     icon: ShieldQuestionMark,
   },
-  // Solid rather than transparent: the strip is one object, and a hole in it
-  // reads as a gap rather than as a zero.
-  EMPTY: 'bg-white text-ink-400 dark:bg-ink-900 dark:text-ink-500',
 };
 
 // One row per package, because a package is what an image is made of. The
@@ -494,18 +503,22 @@ export function SeverityStrip({
   onPick?: (severity: Severity) => void;
 }) {
   return (
-    <div
-      className="flex shrink-0 overflow-hidden rounded-md"
-      role="group"
-      aria-label="Findings by severity"
-    >
+    <div className="flex shrink-0" role="group" aria-label="Findings by severity">
       {ORDER.map((severity) => {
         const count = counts[severity] ?? 0;
         const on = active === severity;
         const tone = TONE[severity];
         const named = severity.toLowerCase();
-        const paint = `flex h-6 w-7 shrink-0 items-center justify-center border-r border-white/25 text-tiny font-semibold tabular-nums last:border-r-0 dark:border-black/25 ${
-          count === 0 ? TONE.EMPTY : tone.strip
+        // The corners are on the end segments themselves, not on a rounded
+        // box clipping them. WebKit does not reliably clip a child's own
+        // background to a rounded parent inside a subgrid, so the right end
+        // came out square while the left looked fine.
+        //
+        // 28x20: wide enough that a three-digit count -- which a single
+        // severity does reach on a large image -- is not cut off, and no
+        // taller than the line of text beside it.
+        const paint = `flex h-5 w-7 shrink-0 items-center justify-center border-r border-white/25 text-tiny font-semibold tabular-nums first:rounded-l-md last:rounded-r-md last:border-r-0 dark:border-black/25 ${
+          count === 0 ? tone.faint : tone.strip
         }`;
 
         if (!onPick) {
