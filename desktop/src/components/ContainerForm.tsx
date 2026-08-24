@@ -6,6 +6,8 @@ import { useToastStore } from '../store/toastStore';
 import type { PendingEdit, ContainerSpec } from '../types';
 import { Checkbox, Field, Fieldset, FormPage, Row } from './form';
 import { Button } from './Button';
+import { ConfirmDialog } from './ConfirmDialog';
+import { formatMemory, list } from '../utils/format';
 import { useValidation } from '../hooks/useValidation';
 import {
   absolutePath,
@@ -174,6 +176,13 @@ export function ContainerForm({
     }))
   );
 
+  // What the Create button has been pressed on, held while the question about
+  // it is up. The spec is taken at the moment of asking rather than read again
+  // on the answer: what the dialog describes and what gets made are then the
+  // same thing, whatever the form does underneath.
+  const [confirming, setConfirming] = useState<{ spec: ContainerSpec; autoBoot: boolean } | null>(
+    null
+  );
   // Whether the run has been asked for and not yet acknowledged. The button
   // spins on it, which is the whole of what this state is for: the work itself
   // belongs to the task strip and outlives this form.
@@ -319,15 +328,19 @@ export function ContainerForm({
   };
 
   /**
-   * What the button does.
+   * What the button does: ask, and only then do it.
    *
-   * Straight to it: nothing is asked first, and the only guard is against a
-   * second press while the first is still being handed over.
+   * Not the confirmation a delete gets -- creating is not destructive. It is
+   * the last place these settings can be read back as a sentence rather than
+   * as thirty fields, which is where a port typed into the wrong box or a
+   * gigabyte that was meant to be a megabyte is actually noticed. Recreating
+   * is destructive as well as long, and gets the same question with the price
+   * of it said out loud.
    */
   const primary = () => {
     if (creating) return;
 
-    void submit();
+    setConfirming({ spec: buildSpec(), autoBoot });
   };
 
   return (
@@ -683,6 +696,101 @@ export function ContainerForm({
           ))
         )}
       </Fieldset>
+
+      {confirming && (
+        <ConfirmDialog
+          {...asked(confirming.spec, confirming.autoBoot, editing)}
+          onConfirm={() => {
+            const { spec } = confirming;
+            setConfirming(null);
+            void submit(spec);
+          }}
+          onCancel={() => setConfirming(null)}
+        />
+      )}
     </FormPage>
   );
+}
+
+/**
+ * The question the button asks before it does anything.
+ *
+ * The same shape for both, and the difference between them is the first line:
+ * creating costs nothing but a container, and recreating costs the one that is
+ * there now. What it will be afterwards is said either way -- that is the part
+ * worth checking, and it is the same paragraph in both cases.
+ */
+export function asked(
+  spec: ContainerSpec,
+  autoBoot: boolean,
+  editing?: string
+): { title: string; body: string; confirmLabel: string } {
+  const becomes = summarise(spec, autoBoot);
+
+  if (editing) {
+    return {
+      title: `Recreate ${editing}?`,
+      // The cost first. Apple's CLI has no update, so saving is a delete and a
+      // run -- and somebody who reads no further than the first line should
+      // still have read the part that cannot be undone.
+      body: `It is stopped, deleted and run again with these settings. Named volumes survive; anything written to the container filesystem does not. ${becomes}`,
+      confirmLabel: 'Recreate',
+    };
+  }
+
+  return {
+    title: spec.name ? `Create ${spec.name}?` : 'Create this container?',
+    body: becomes,
+    confirmLabel: 'Create',
+  };
+}
+
+/**
+ * What is about to be made, read back as a sentence.
+ *
+ * Only what somebody would want checked, and only what they set: the image and
+ * what it is allowed to spend, where it will answer, what it will be able to
+ * write to, and the two settings that outlive the run. Everything left at its
+ * default is left out -- a paragraph that lists eight defaults is a paragraph
+ * nobody finishes, and the mistake being looked for is hiding in it.
+ */
+export function summarise(spec: ContainerSpec, autoBoot: boolean): string {
+  // Both are allowed to be empty, and empty means the CLI decides -- so an
+  // unset limit is said as that rather than as the number this form happens to
+  // show, which would be the one thing here that was not true.
+  const limits = [
+    spec.cpus ? `${spec.cpus} CPU${spec.cpus === 1 ? '' : 's'}` : null,
+    spec.memory ? `${formatMemory(spec.memory)} of memory` : null,
+  ].filter(Boolean);
+
+  const sentences = [
+    limits.length > 0
+      ? `${spec.image} runs with ${limits.join(' and ')}, and starts straight away.`
+      : `${spec.image} runs on the CLI's own defaults, and starts straight away.`,
+  ];
+
+  if (!spec.name) sentences.push('The CLI will give it a name, since none was set.');
+
+  const ports = spec.ports ?? [];
+  if (ports.length > 0) {
+    sentences.push(
+      `${list(ports.map((p) => `${p.host} → ${p.container}`))} ${ports.length === 1 ? 'is' : 'are'} published on this Mac.`
+    );
+  }
+
+  const mounts = spec.mounts ?? [];
+  if (mounts.length > 0) {
+    sentences.push(
+      `${list(mounts.map((m) => `${m.source} → ${m.target}`))} ${mounts.length === 1 ? 'is' : 'are'} mounted into it.`
+    );
+  }
+
+  if (spec.networks && spec.networks.length > 0) {
+    sentences.push(`It sits on ${list(spec.networks)}.`);
+  }
+
+  if (spec.removeOnExit) sentences.push('It is deleted as soon as it stops.');
+  if (autoBoot) sentences.push('It will start again whenever Dermaga does.');
+
+  return sentences.join(' ');
 }

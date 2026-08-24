@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ConfirmDialogProps {
   title: string;
@@ -28,7 +29,13 @@ export function ConfirmDialog({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onCancel]);
 
-  return (
+  // Into the body rather than wherever it was asked for. An alert covers the
+  // window -- that is what makes it an alert -- and `fixed` only means the
+  // window while no ancestor has contained it. A form laid out against the
+  // width of the page it is on is exactly such an ancestor, and a question
+  // asked from inside one was pinned to the page instead, dimming the content
+  // area and leaving the sidebar and the title bar lit beside it.
+  return createPortal(
     <div
       className="fixed inset-0 z-40 flex items-center justify-center bg-ink-950/55 p-6"
       onClick={onCancel}
@@ -60,6 +67,7 @@ export function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
