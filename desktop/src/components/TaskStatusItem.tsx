@@ -102,7 +102,7 @@ export function TaskStatusItem() {
         aria-label={summarise(running, failed.length, tasks.length)}
         title={summarise(running, failed.length, tasks.length)}
         className={`no-drag flex items-center rounded-md px-1.5 py-1 transition-colors hover:bg-chrome-raised ${
-          failed.length > 0 ? 'text-brand-400' : 'text-chrome-muted'
+          failed.length > 0 ? 'text-brand-600 dark:text-brand-400' : 'text-chrome-muted'
         } ${tasks.length === 0 ? 'text-chrome-faint' : ''}`}
       >
         {/* Turning is what the icon says while anything is turning, even with

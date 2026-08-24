@@ -93,7 +93,7 @@ export function ContainerNamesItem() {
     <div ref={wrapper} className="relative">
       <button
         onClick={() => setOpen((value) => !value)}
-        className="no-drag flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-amber-500 transition-colors hover:bg-chrome-raised"
+        className="no-drag flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-500 transition-colors hover:bg-chrome-raised"
       >
         <TriangleAlert size={12} aria-hidden />
         {state.registered ? `${behind.length} without a name` : 'Container names are off'}

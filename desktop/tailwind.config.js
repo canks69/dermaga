@@ -58,14 +58,42 @@ export default {
           900: '#262123',
           950: '#1e1a1c',
         },
-        // The title bar and the sidebar. Near-black in both themes rather than
-        // a shade of the ground: they are the frame the app is set in, and a
-        // frame that changes colour with the picture stops being one.
+        // The title bar and the sidebar: the frame the app is set in.
+        //
+        // Held as variables rather than as values, because the frame follows
+        // the theme -- near-black in the dark, a shade under the page's own
+        // paper in the light. It was fixed at near-black in both, on the
+        // grounds that a frame should not change colour with the picture; what
+        // that gave a light window was a black border down two sides of it,
+        // which is a picture in a frame from a different room. The values are
+        // in index.css, one set per theme.
+        //
+        // `edge` is the line where the frame meets the content. Anything in
+        // the frame that goes red or amber says so the way the rest of the app
+        // does -- `text-amber-700 dark:text-amber-500` -- now that the ground
+        // behind it turns over with the theme like every other ground.
         chrome: {
+          bg: 'var(--chrome-bg)',
+          raised: 'var(--chrome-raised)',
+          line: 'var(--chrome-line)',
+          track: 'var(--chrome-track)',
+          text: 'var(--chrome-text)',
+          muted: 'var(--chrome-muted)',
+          dim: 'var(--chrome-dim)',
+          faint: 'var(--chrome-faint)',
+          edge: 'var(--chrome-edge)',
+          well: 'var(--chrome-well)',
+        },
+        // A log pane, a terminal, the box a command's output is read in.
+        //
+        // These are the values the frame used to have, and they are fixed on
+        // purpose: output arrives with colour in it, the sixteen ANSI colours
+        // here are pulled towards a near-black ground, and a box that turned
+        // white in a light window would wash half of them out. It is an inset
+        // cut into the page rather than part of its surface.
+        terminal: {
           bg: '#171416',
           raised: '#221d1f',
-          line: '#332c2e',
-          track: '#373033',
           text: '#f2efee',
           muted: '#cfc9c6',
           dim: '#9a9390',

@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import {
   Boxes,
   ChevronsLeft,
@@ -51,6 +51,8 @@ const NAV: NavGroup[] = [
     entries: [
       {
         target: { name: 'containers' },
+        // The form that makes one belongs to this section too: a page with
+        // nothing lit in the sidebar reads as having left the app.
         owns: ['containers', 'container', 'container-new', 'container-edit', 'templates'],
         icon: Boxes,
         label: 'Containers',
@@ -168,33 +170,18 @@ export function Sidebar({ version }: { version?: string }) {
         </span>
         {/* Counted, not just labelled: the number is what tells you whether a
             page is worth opening, and it is the one thing the sidebar can say
-            about a page without being on it. */}
-        {!collapsed && total !== undefined && (
-          <span
-            className={`shrink-0 font-mono text-tiny ${active ? 'opacity-80' : 'text-chrome-faint'}`}
-          >
-            {total}
-          </span>
-        )}
-
-        {/* In the same place a count would be, because it answers the same
-            question: what is this page, before you open it. */}
-        {!collapsed && beta && (
-          <span
-            className={`shrink-0 rounded text-tiny font-medium ${
-              active ? 'opacity-80' : 'text-chrome-faint'
-            }`}
-          >
-            beta
-          </span>
-        )}
+            about a page without being on it. The word "beta" takes the same
+            slot, because it answers the same question -- what is this page,
+            before you open it. */}
+        {!collapsed && total !== undefined && <Meta active={active}>{total}</Meta>}
+        {!collapsed && beta && <Meta active={active}>beta</Meta>}
       </button>
     );
   };
 
   return (
     <nav
-      className={`flex shrink-0 flex-col gap-0.5 border-r border-black/40 bg-chrome-bg px-2.5 pb-2.5 pt-3.5 transition-[width] duration-200 ease-out ${
+      className={`flex shrink-0 flex-col gap-0.5 border-r border-chrome-edge bg-chrome-bg px-2.5 pb-2.5 pt-3.5 transition-[width] duration-200 ease-out ${
         collapsed ? 'w-17' : 'w-58'
       }`}
     >
@@ -235,6 +222,45 @@ export function Sidebar({ version }: { version?: string }) {
         />
       </button>
     </nav>
+  );
+}
+
+/**
+ * What an entry says about its page before it is opened: how many things are
+ * on it, or that it is still finding its feet.
+ *
+ * A badge rather than a figure set in grey. Bare, it was the faintest tone on
+ * the frame -- the tone for things the eye is meant to slide past, a
+ * placeholder, a caption it has already read -- and a number is not that: it
+ * is the whole of what this row says beyond its name, and somebody looks
+ * straight at it. The pill gives it an edge to sit against, so it can be quiet
+ * without being faint.
+ *
+ * Tinted with black or white rather than with a colour from the frame's own
+ * scale: the row lights up under the pointer, and anything painted in a frame
+ * colour would have vanished into that hover. A translucent tint stacks on top
+ * of whatever it lands on instead, so the badge keeps its shape on a plain
+ * row, a hovered one, and the flag red of the active one -- where it goes
+ * white on white rather than taking a colour of its own, because a second
+ * colour inside a filled row reads as a second thing in it.
+ */
+function Meta({ active, children }: { active: boolean; children: ReactNode }) {
+  return (
+    <span
+      // Round rather than boxed, and a fixed height rather than padding around
+      // a line: a count is a token, not a cell. Boxed, at four different widths
+      // down a column, they read as five little buttons; round and all the same
+      // height, they read as one kind of thing said five times.
+      //
+      // The floor on the width is what keeps that true -- single digits are
+      // most of what is counted here, and a pill that shrinks to fit one leaves
+      // the sidebar's right edge ragged down its whole length.
+      className={`inline-flex h-4.5 min-w-6 shrink-0 items-center justify-center rounded-full px-1.5 font-mono text-tiny font-medium ${
+        active ? 'bg-white/20 text-white' : 'bg-black/5 text-chrome-dim dark:bg-white/10'
+      }`}
+    >
+      {children}
+    </span>
   );
 }
 

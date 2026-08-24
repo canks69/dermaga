@@ -111,7 +111,7 @@ export function RegistriesPage() {
                       glance across four cards. */}
                   <span
                     aria-hidden
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-chrome-bg font-mono text-body text-chrome-text"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-terminal-bg font-mono text-body text-terminal-text"
                   >
                     {initials(login.server)}
                   </span>

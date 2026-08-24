@@ -94,7 +94,7 @@ export function TitleBar({ build, system, connection, error }: TitleBarProps) {
     // The middle track is capped at the field's own width and can shrink below
     // it; the sides truncate rather than push, because nothing in them is worth
     // moving the one thing you aim at with a keyboard shortcut.
-    <header className="drag grid h-13 shrink-0 grid-cols-[1fr_minmax(0,26.25rem)_1fr] items-center gap-4 border-b border-black/50 bg-chrome-bg px-4 text-chrome-text">
+    <header className="drag grid h-13 shrink-0 grid-cols-[1fr_minmax(0,26.25rem)_1fr] items-center gap-4 border-b border-chrome-edge bg-chrome-bg px-4 text-chrome-text">
       <div className="flex min-w-0 items-center gap-4">
         {/* The traffic lights are drawn by macOS over this corner, so the row
             starts to the right of them. Fullscreen takes them away. */}
@@ -131,7 +131,7 @@ export function TitleBar({ build, system, connection, error }: TitleBarProps) {
       {/* Searching from up here asks every kind of resource at once, so it
           cannot belong to a page: the answer is a page of its own, and the box
           that asked for it has to stay put while you read it. */}
-      <div className="no-drag flex h-7.5 w-full items-center gap-2 rounded-lg border border-chrome-line bg-chrome-raised px-2.5 focus-within:border-chrome-faint">
+      <div className="no-drag flex h-7.5 w-full items-center gap-2 rounded-lg border border-chrome-line bg-chrome-well px-2.5 focus-within:border-chrome-faint">
         <Search size={13} className="shrink-0 text-chrome-faint" aria-hidden />
         <input
           ref={field}
@@ -199,14 +199,14 @@ function EngineStatus({
     connection === 'disconnected'
       ? {
           icon: TriangleAlert,
-          tone: 'text-amber-500',
+          tone: 'text-amber-700 dark:text-amber-500',
           label: 'Agent offline',
           title: 'Lost contact with the Dermaga agent',
         }
       : system?.running
         ? {
             icon: Zap,
-            tone: 'text-emerald-500',
+            tone: 'text-emerald-700 dark:text-emerald-500',
             label: 'Engine running',
             title: system.status,
           }
@@ -243,7 +243,10 @@ function EngineStatus({
  */
 function Problem({ label }: { label: string }) {
   return (
-    <span title={label} className="flex min-w-0 items-center gap-1.5 px-1.5 text-xs text-amber-500">
+    <span
+      title={label}
+      className="flex min-w-0 items-center gap-1.5 px-1.5 text-xs text-amber-700 dark:text-amber-500"
+    >
       <AlertTriangle size={12} className="shrink-0" aria-hidden />
       <span className="max-w-64 truncate">{label}</span>
     </span>
@@ -277,7 +280,7 @@ function UpdatePill() {
       <button
         onClick={() => void run()}
         title={error ?? undefined}
-        className="no-drag flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-amber-500 transition-colors hover:bg-chrome-raised"
+        className="no-drag flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-amber-700 dark:text-amber-500 transition-colors hover:bg-chrome-raised"
       >
         <AlertTriangle size={12} aria-hidden />
         Update failed — retry
@@ -296,7 +299,7 @@ function UpdatePill() {
       <button
         onClick={() => void run()}
         title={`Dermaga ${version} is downloaded. Opening the installer closes Dermaga; the new version has to be dragged across.`}
-        className="no-drag flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-brand-400 transition-colors hover:bg-chrome-raised"
+        className="no-drag flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-brand-600 dark:text-brand-400 transition-colors hover:bg-chrome-raised"
       >
         <ArrowDownToLine size={12} aria-hidden />v{version} ready to install
       </button>
@@ -307,7 +310,7 @@ function UpdatePill() {
     <button
       onClick={() => void run()}
       title={`Dermaga ${version} is downloaded and verified. Restarting takes a moment and installs it — containers keep running.`}
-      className="no-drag flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-brand-400 transition-colors hover:bg-chrome-raised"
+      className="no-drag flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-brand-600 dark:text-brand-400 transition-colors hover:bg-chrome-raised"
     >
       <RefreshCw size={12} aria-hidden />
       Restart to update

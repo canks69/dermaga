@@ -109,17 +109,17 @@ export function LogPane({ method, params, controls, missingHint }: LogPaneProps)
       <div
         ref={scrollRef}
         onScroll={onScroll}
-        className="ansi ansi-terminal selectable min-h-0 flex-1 overflow-auto rounded-xl bg-chrome-bg p-4 font-mono text-code leading-[1.75] text-chrome-muted"
+        className="ansi ansi-terminal selectable min-h-0 flex-1 overflow-auto rounded-xl bg-terminal-bg p-4 font-mono text-code leading-[1.75] text-terminal-muted"
       >
         {noLogFile ? (
-          <div className="max-w-prose font-sans text-sm text-chrome-dim">
-            <p className="text-chrome-text">No logs yet.</p>
+          <div className="max-w-prose font-sans text-sm text-terminal-dim">
+            <p className="text-terminal-text">No logs yet.</p>
             <p className="mt-1">
               {missingHint ?? 'Nothing has been written here yet — there is no log file to read.'}
             </p>
           </div>
         ) : visible.length === 0 ? (
-          <p className="font-sans text-sm text-chrome-faint">
+          <p className="font-sans text-sm text-terminal-faint">
             {entries.length === 0 ? 'Waiting for output…' : 'No lines match the filter.'}
           </p>
         ) : (
@@ -129,7 +129,7 @@ export function LogPane({ method, params, controls, missingHint }: LogPaneProps)
           visible.map((entry, index) => (
             <p key={index} className="flex gap-3">
               {entry.timestamp && (
-                <span className="shrink-0 text-chrome-faint">{entry.timestamp}</span>
+                <span className="shrink-0 text-terminal-faint">{entry.timestamp}</span>
               )}
               <span className="min-w-0 whitespace-pre-wrap break-all">
                 <AnsiLine message={entry.message} />
