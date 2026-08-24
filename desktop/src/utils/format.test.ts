@@ -3,6 +3,7 @@ import {
   formatDuration,
   formatMemory,
   formatRate,
+  list,
   parseMebibytes,
   shortImage,
   splitEnv,
@@ -77,5 +78,24 @@ describe('formatRate', () => {
   it('says nothing is moving rather than nothing is known', () => {
     expect(formatRate(0)).toBe('0 B/s');
     expect(formatRate(undefined)).toBe('0 B/s');
+  });
+});
+
+/**
+ * A list said in a sentence, which is where these are read: a confirmation
+ * that names what is about to happen, not a column somebody scans.
+ */
+describe('naming a few things in a sentence', () => {
+  it('says one, and says two', () => {
+    expect(list(['8080 → 80'])).toBe('8080 → 80');
+    expect(list(['80 → 80', '443 → 443'])).toBe('80 → 80 and 443 → 443');
+  });
+
+  it('counts the rest rather than running on', () => {
+    expect(list(['a', 'b', 'c', 'd'])).toBe('a, b and 2 more');
+  });
+
+  it('has nothing to say about nothing', () => {
+    expect(list([])).toBe('');
   });
 });
