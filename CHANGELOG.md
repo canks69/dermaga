@@ -7,6 +7,25 @@ GitHub release for each tag carries that generated list with its commit hashes.
 This project follows [semantic versioning](https://semver.org): the version is bumped for what the
 change means to someone using Dermaga, not for how much code moved.
 
+## [v1.11.1] — 2026-08-24
+
+### Fixed
+
+- **A published hostname could quietly start answering the wrong thing.** Cloudflare takes a tunnel's
+  routing as one whole document — there is no way to change a single rule — so every change sends the
+  entire table. Dermaga rebuilds it whenever a container moves, which it watches for, and nothing
+  stopped two of those rebuilds overlapping. Two whole tables in flight, and the one worked out second
+  could arrive first: Cloudflare would be left holding a table nobody asked for, and nothing here
+  would ever notice, because every record on this Mac was correct. The failure was silent — a hostname
+  that stopped answering, or answered a different container, with no error anywhere to explain it.
+  Rebuilds now happen one at a time; adding or removing a route waits its turn, and the automatic
+  pass gives way rather than queueing up behind it.
+- **The fit button on the Networks and Tunnels maps did nothing you could see.** It worked — it put
+  the view back exactly where it started — but both maps frame themselves on arrival and again
+  whenever they change shape, so they are already framed almost all the time and pressing it changed
+  nothing. Its icon promised fullscreen, which was never what it did. It is gone; zoom in and out
+  stay, and the map still re-frames itself whenever anything is added or removed.
+
 ## [v1.11.0] — 2026-08-24
 
 ### Added
