@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
+import { PageHeader } from './PageHeader';
 import { tabWrap } from '../utils/focus';
 
 const FOCUSABLE =
@@ -141,7 +142,12 @@ export function Modal({
         // panel, which left the whole thing washed out and barely readable --
         // and a panel that changes colour depending on which button opened it
         // is not a panel, it is an accident waiting for the next call site.
-        className={`flex max-h-full w-full flex-col overflow-hidden rounded-2xl bg-ink-100 text-ink-900 shadow-panel dark:bg-ink-950 dark:text-ink-100 ${
+        // A container, so what is laid out inside asks how wide the panel is
+        // rather than how wide the window is. The two are not the same
+        // question: this same form is a page beside a sidebar as well, and a
+        // narrow dialog on a wide screen would otherwise lay itself out for
+        // the screen and squeeze two columns into half a panel.
+        className={`@container flex max-h-full w-full flex-col overflow-hidden rounded-2xl bg-ink-100 text-ink-900 shadow-panel dark:bg-ink-950 dark:text-ink-100 ${
           wide ? 'max-w-3xl' : 'max-w-xl'
         }`}
       >
@@ -172,6 +178,89 @@ export function Modal({
           </p>
           {footer}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The same form, laid on a page instead of over one.
+ *
+ * A dialog is the right shape for a decision and the wrong one for a long
+ * form: a panel floating over a list has to scroll inside itself, and what it
+ * covers is exactly the thing being added to. This keeps the head, the
+ * scrolling body and the foot a dialog has -- the shortcut still finishes it,
+ * the buttons are still in the bottom right -- and gives them the page's
+ * width and the page's own way out, which is the back link every other page
+ * here is left by.
+ *
+ * No focus trap and no Escape. Neither belongs to a page: there is nothing
+ * behind it to keep the caret out of, and a key that throws away a form this
+ * long because it was reached for the field beside it is a key that costs
+ * somebody ten minutes.
+ */
+export function FormPage({
+  title,
+  subtitle,
+  backTo,
+  onClose,
+  onSubmit,
+  children,
+  footer,
+  hint,
+}: {
+  title: string;
+  subtitle?: string;
+  /** Where the back link goes, named — "Containers", "Images". */
+  backTo?: string;
+  onClose: () => void;
+  /** What the primary button does, so ⌘↩ can do it too. */
+  onSubmit?: () => void;
+  children: ReactNode;
+  footer: ReactNode;
+  hint?: ReactNode;
+}) {
+  useEffect(() => {
+    if (!onSubmit) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        onSubmit();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onSubmit]);
+
+  return (
+    // The container everything below measures itself against: what this page
+    // has to lay out in is the window minus the sidebar, and the sidebar
+    // collapses. Asking the viewport would mean the form re-laid itself only
+    // when the window changed size, and not when the space it is in did.
+    <div className="@container flex min-h-0 flex-1 flex-col">
+      <PageHeader onBack={onClose} backTo={backTo} title={title} subtitle={subtitle} />
+
+      {/* The whole width of the page, in the same gutter every other page
+          keeps. It was a centred column, held to the width the dialog had --
+          which on this page meant the form stayed the size of the dialog it
+          had just stopped being, with the room it had been given left empty
+          down both sides. The lists are what gains: a port, a mount and an
+          environment variable are each a line of several fields, and the line
+          is as long as the page. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex w-full flex-col gap-4.5 px-5 py-5 @2xl:px-7">{children}</div>
+      </div>
+
+      {/* The foot spans the page rather than the column: it is the edge of the
+          window, the same as the strip under a dialog is the edge of the panel,
+          and a bar stopping short of the sides reads as another card. */}
+      <div className="header-actions flex shrink-0 items-center gap-2.5 border-t border-ink-200 bg-white px-5 py-3.5 @2xl:px-7 dark:border-ink-800 dark:bg-ink-900">
+        <p className="min-w-0 flex-1 truncate text-xs text-ink-500">
+          {hint ?? (onSubmit ? <Shortcut /> : null)}
+        </p>
+        {footer}
       </div>
     </div>
   );
@@ -241,6 +330,7 @@ export function Fieldset({
   onBlur,
   onAdd,
   addLabel,
+  columns = 1,
   children,
 }: {
   legend: string;
@@ -258,6 +348,17 @@ export function Fieldset({
   // Omitted by groups that are not a list of rows, such as the .env editor.
   onAdd?: () => void;
   addLabel?: string;
+  /**
+   * Two, for a group of ordinary fields: a name is half a line of text and a
+   * card of them one to a row is a column of boxes with the right-hand half of
+   * the page empty beside it. One -- the default -- for anything whose rows
+   * are already full width, which is every list here.
+   *
+   * It collapses back to one when the panel it is in is narrow -- which is
+   * the panel's width, not the window's: the same card is a page beside a
+   * sidebar and a dialog over one.
+   */
+  columns?: 1 | 2;
   children: ReactNode;
 }) {
   const body = useRef<HTMLDivElement>(null);
@@ -325,7 +426,11 @@ export function Fieldset({
       <div
         ref={body}
         onKeyDown={onKeyDown}
-        className="flex flex-col gap-2.5 rounded-xl border border-ink-200 bg-white p-3.5 dark:border-ink-800 dark:bg-ink-900"
+        className={`rounded-xl border border-ink-200 bg-white p-3.5 dark:border-ink-800 dark:bg-ink-900 ${
+          columns === 2
+            ? 'grid grid-cols-1 gap-x-4 gap-y-3.5 @md:grid-cols-2'
+            : 'flex flex-col gap-2.5'
+        }`}
       >
         {children}
         {onAdd && (
@@ -352,7 +457,12 @@ export function Row({ onRemove, children }: { onRemove: () => void; children: Re
   return (
     // Marked so the fieldset above can find the row it has just added and put
     // the caret in it.
-    <div data-row className="flex items-center gap-2">
+    //
+    // Wrapping, because a row is three or four controls in a line and the line
+    // is only as long as the panel: past a point the choice is between fields
+    // too narrow to read what is in them and a second line, and a second line
+    // is the one that still works.
+    <div data-row className="flex flex-wrap items-center gap-2">
       {children}
       <button
         type="button"
@@ -376,7 +486,10 @@ export function Checkbox({
   label: string;
 }) {
   return (
-    <label className="flex h-7 items-center gap-2 text-xs">
+    // A floor rather than a fixed height: these line up with the controls
+    // beside them at 28px, and a label long enough to wrap used to be drawn
+    // straight out of the bottom of the box.
+    <label className="flex min-h-7 items-center gap-2 text-xs">
       <input
         type="checkbox"
         checked={checked}

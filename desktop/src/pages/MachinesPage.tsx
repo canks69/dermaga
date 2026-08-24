@@ -2,14 +2,12 @@ import { useState } from 'react';
 import { Play, Plus, Square, Trash2 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { CreateMachineDialog } from '../components/MachineForm';
 import { DataTable, Muted, NameCell, SelectionActions, type Column } from '../components/DataTable';
 import { DefaultStar, StatusText } from '../components/StatusBadge';
 import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
-import { useDialog } from '../hooks/useDialog';
 import { useUIStore } from '../store/uiStore';
 import type { Machine } from '../types';
 import { formatBytes, formatDuration, formatMemory } from '../utils/format';
@@ -31,7 +29,9 @@ export function MachinesPage({ runtimeMissing }: { runtimeMissing: boolean }) {
   const machines = useResourceStore((s) => s.machines);
   const hasLoaded = useResourceStore((s) => s.hasLoaded);
   const openMachine = useUIStore((s) => s.openMachine);
-  const creating = useDialog('machine.create');
+  // Creating is a page: it is a pull and a boot, and what it prints while it
+  // works is the thing worth watching.
+  const newMachine = useUIStore((s) => s.newMachine);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   // Which single machine's own button is spinning, as opposed to a bulk run.
@@ -149,7 +149,7 @@ export function MachinesPage({ runtimeMissing }: { runtimeMissing: boolean }) {
             </SelectionActions>
           ) : (
             <button
-              onClick={() => creating.show()}
+              onClick={() => newMachine()}
               className="btn-plain-primary"
               title="New machine"
               aria-label="New machine"
@@ -210,8 +210,6 @@ export function MachinesPage({ runtimeMissing }: { runtimeMissing: boolean }) {
           </Muted>,
         ]}
       />
-
-      {creating.open && <CreateMachineDialog onClose={() => creating.close()} />}
 
       {confirmingDelete && (
         <ConfirmDialog

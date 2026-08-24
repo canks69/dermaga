@@ -6,7 +6,7 @@ import { useUIStore } from '../store/uiStore';
 /**
  * A Dockerfile dragged in from Finder.
  *
- * Building one means telling the dialog the folder, the file within it and a
+ * Building one means telling the form the folder, the file within it and a
  * tag, and the first two are things the file already knows -- so dropping it on
  * the window fills them in and leaves the caret in the one field that is
  * genuinely a decision.
@@ -18,7 +18,7 @@ import { useUIStore } from '../store/uiStore';
  * answers it. See `.file-drop-target-active` in index.css.
  */
 export function useFileDrop(): void {
-  const navigateWith = useUIStore((s) => s.navigateWith);
+  const buildImage = useUIStore((s) => s.buildImage);
   const pushToast = useToastStore((s) => s.push);
 
   useEffect(() => {
@@ -34,12 +34,12 @@ export function useFileDrop(): void {
             return;
           }
 
-          navigateWith({ name: 'images' }, 'image.build', drop);
+          buildImage({ drop });
         })
         .catch(() => {
           // The shell could not read the path. Nothing to open, and nothing to
           // say about it that the drop not working has not said already.
         });
     });
-  }, [navigateWith, pushToast]);
+  }, [buildImage, pushToast]);
 }

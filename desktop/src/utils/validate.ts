@@ -148,6 +148,17 @@ export function containerName(value: string): string | null {
 }
 
 /**
+ * What the runtime will not boot a machine in less than.
+ *
+ * `invalid memory value '512mb'. Must be greater than 1gb` -- and a gibibyte
+ * exactly is accepted, so "at least" is the honest way to say it. Here rather
+ * than at either call site: the form that makes a machine and the sheet that
+ * resizes one have to refuse the same number, and two copies of a rule are two
+ * chances to change one of them.
+ */
+export const machineMinimumMiB = 1024;
+
+/**
  * An image reference: a name, optionally with a registry in front and a tag or
  * digest after it.
  *

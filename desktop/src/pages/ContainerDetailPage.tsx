@@ -40,7 +40,6 @@ import type { TabDefinition } from '../components/Tabs';
 import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Facts, Flags, Row, Section } from '../components/DetailRow';
-import { ContainerForm } from '../components/ContainerForm';
 import { api } from '../services/api';
 import { recreateContainer } from '../services/tasks';
 import { openExternal } from '../services/ipc';
@@ -49,14 +48,7 @@ import { useLiveUsage } from '../hooks/useLiveUsage';
 import { useSettingsStore } from '../store/settingsStore';
 import { useToastStore } from '../store/toastStore';
 import { useUIStore } from '../store/uiStore';
-import type {
-  PendingEdit,
-  Container,
-  ContainerSpec,
-  ContainerTab,
-  Port,
-  TunnelRoute,
-} from '../types';
+import type { Container, ContainerTab, Port, TunnelRoute } from '../types';
 import {
   formatBytes,
   formatDuration,
@@ -116,9 +108,8 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
   // what its tag points at.
   const [confirmingRecreate, setConfirmingRecreate] = useState(false);
   const [recreating, setRecreating] = useState(false);
-  const [editing, setEditing] = useState<ContainerSpec | null>(null);
-  // An edit that did not finish last time, offered back rather than retyped.
-  const [resumed, setResumed] = useState<PendingEdit | null>(null);
+  // Only the reading of it is held here; the form it fills is a page of its
+  // own, and the pencil spins until the answer is back to open it with.
   const [loadingSpec, setLoadingSpec] = useState(false);
   const [marking, setMarking] = useState(false);
   // The public hostnames this container answers on. A container with several
@@ -126,6 +117,7 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
   const [routes, setRoutes] = useState<TunnelRoute[]>([]);
 
   const back = useUIStore((s) => s.back);
+  const editContainer = useUIStore((s) => s.editContainer);
   const setTab = useUIStore((s) => s.setTab);
   const logTail = useSettingsStore((s) => s.logTail);
   const confirmDestructive = useSettingsStore((s) => s.confirmDestructive);
@@ -375,8 +367,16 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
                 api.getPendingEdit(container.id).catch(() => null),
               ])
                 .then(([spec, pending]) => {
-                  setResumed(pending ?? null);
-                  setEditing(pending?.spec ?? spec ?? null);
+                  const opening = pending?.spec ?? spec;
+                  // Nothing to open the form on is nothing to show: better to
+                  // stay on the container and say so than to open a page of
+                  // empty fields that would recreate it as something else.
+                  if (!opening) {
+                    pushToast('Could not read this container’s configuration', 'error');
+                    return;
+                  }
+
+                  editContainer(container.id, opening, pending ?? undefined);
                 })
                 .catch(() => pushToast('Could not read this container’s configuration', 'error'))
                 .finally(() => setLoadingSpec(false));
@@ -425,27 +425,6 @@ export function ContainerDetailPage({ container, tab: requested, path }: Contain
           </DetailPane>
         )}
       </DetailBody>
-
-      {editing && (
-        <ContainerForm
-          editing={container.id}
-          initial={editing}
-          startsWithDermaga={container.autoBoot}
-          resumed={resumed ?? undefined}
-          onDiscardResumed={() => {
-            void api.discardPendingEdit(container.id).catch(() => {
-              // Nothing to tell the user: the form is closing either way, and
-              // the next edit reads the container itself.
-            });
-            setResumed(null);
-            setEditing(null);
-          }}
-          onClose={() => {
-            setEditing(null);
-            setResumed(null);
-          }}
-        />
-      )}
 
       {confirmingRecreate && (
         <ConfirmDialog

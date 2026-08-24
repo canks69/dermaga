@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Boxes, Globe, Laptop, Server } from 'lucide-react';
-import { Button } from './Button';
-import { SegmentedControl, type Segment } from './SegmentedControl';
-import { Field, Modal } from './form';
+import { Button } from '../components/Button';
+import { SegmentedControl, type Segment } from '../components/SegmentedControl';
+import { Field, Fieldset, FormPage } from '../components/form';
+import { Autocomplete } from '../components/Autocomplete';
 import { api } from '../services/api';
 import { useToastStore } from '../store/toastStore';
+import { useUIStore } from '../store/uiStore';
 import { useValidation } from '../hooks/useValidation';
 import { port as validPort, subdomain as validSubdomain } from '../utils/validate';
-import type { TunnelKind, TunnelRoute, TunnelTarget, Zone } from '../types';
+import type { Route, TunnelKind, TunnelTarget, Zone } from '../types';
 
 const KINDS: Segment<TunnelKind>[] = [
   { value: 'container', label: 'Container', icon: Boxes },
@@ -22,17 +24,18 @@ const KINDS: Segment<TunnelKind>[] = [
  * from a list is one you can type into: there are two dozen domains here on a
  * real account, and a container with an unusual port is not a reason to be
  * unable to publish it.
+ *
+ * A page rather than a dialog over the topology. It asks Cloudflare for two
+ * lists before it can be answered, which means it opens empty and fills in --
+ * and a panel that covers the picture of what is already published, while
+ * loading the very thing that picture is about, hides the one thing worth
+ * looking at while deciding. Adding and moving are the same form: a move is an
+ * add that names what it replaces.
  */
-export function RouteDialog({
-  editing,
-  onClose,
-  onDone,
-}: {
-  /** The route being moved, if this is a move rather than an addition. */
-  editing?: TunnelRoute | null;
-  onClose: () => void;
-  onDone: (route: TunnelRoute) => void;
-}) {
+export function TunnelRoutePage({ route }: { route: Extract<Route, { name: 'tunnel-route' }> }) {
+  const back = useUIStore((s) => s.back);
+  const editing = route.editing;
+  const onClose = back;
   const [zones, setZones] = useState<Zone[] | null>(null);
   const [targets, setTargets] = useState<TunnelTarget[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -103,7 +106,7 @@ export function RouteDialog({
     setBusy(true);
 
     try {
-      const route = await api.addRoute({
+      const added = await api.addRoute({
         replaces: editing?.hostname,
         zoneId: zone!.id,
         subdomain: label.trim(),
@@ -112,8 +115,10 @@ export function RouteDialog({
         port: port.trim(),
       });
 
-      pushToast(`${where(route.kind, route.target, route.port)} is on ${route.hostname}`);
-      onDone(route);
+      pushToast(`${where(added.kind, added.target, added.port)} is on ${added.hostname}`);
+      // Back to the picture, which draws itself from what the agent pushes --
+      // the new route is already in it by the time this lands.
+      back();
     } catch (err) {
       pushToast(err instanceof Error ? err.message : 'Could not add the route', 'error');
     } finally {
@@ -126,7 +131,8 @@ export function RouteDialog({
   const noTargets = kind !== 'host' && targets !== null && ofKind.length === 0;
 
   return (
-    <Modal
+    <FormPage
+      backTo="Tunnels"
       title={editing ? `Move ${editing.hostname}` : 'Add a route'}
       subtitle={
         editing
@@ -175,59 +181,58 @@ export function RouteDialog({
         </p>
       )}
 
-      <Field
-        label="Domain"
-        hint={
-          loading
-            ? 'Asking Cloudflare…'
-            : `Type to search ${zones?.length ?? 0} domains this token reaches.`
-        }
-        {...form.field('domain')}
-      >
-        <input
-          value={domain}
-          onChange={(e) => setDomain(e.target.value)}
-          list="dermaga-zones"
-          placeholder="example.com"
-          autoFocus
-          spellCheck={false}
-          autoComplete="off"
-          // Not disabled while the list loads. The dialog gives focus to the
-          // first field that can take it, and a disabled input cannot -- so
-          // the caret landed on Subdomain, one field past the first question.
-          // Typing before the list arrives is harmless: it fills in behind.
-          disabled={noDomains}
-          className="input font-mono"
-        />
-        {/* The domain and nothing else. The account it belongs to was shown
-            beside it, which is bookkeeping: nowhere else on this page names an
-            account, and a domain is picked because of what it is called. */}
-        <datalist id="dermaga-zones">
-          {(zones ?? []).map((z) => (
-            <option key={z.id} value={z.name} />
-          ))}
-        </datalist>
-      </Field>
+      {/* The hostname it will answer on, which is the whole of the first
+          decision: a domain this token reaches, and a name in front of it. */}
+      <Fieldset legend="Hostname" columns={2}>
+        <Field
+          label="Domain"
+          hint={
+            loading
+              ? 'Asking Cloudflare…'
+              : `Type to search ${zones?.length ?? 0} domains this token reaches.`
+          }
+          {...form.field('domain')}
+        >
+          {/* The domain and nothing else. The account it belongs to was shown
+              beside it, which is bookkeeping: nowhere else on this page names
+              an account, and a domain is picked because of what it is
+              called. */}
+          <Autocomplete
+            value={domain}
+            onChange={setDomain}
+            options={(zones ?? []).map((z) => ({ value: z.name }))}
+            placeholder="example.com"
+            autoFocus
+            // Not disabled while the list loads. The page gives focus to the
+            // first field that can take it, and a disabled input cannot -- so
+            // the caret landed on Subdomain, one field past the first question.
+            // Typing before the list arrives is harmless: it fills in behind.
+            disabled={noDomains}
+            mono
+          />
+        </Field>
 
-      <Field
-        label="Subdomain"
-        hint="Leave empty to publish on the domain itself."
-        {...form.field('label')}
-      >
-        <input
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="api"
-          spellCheck={false}
-          autoComplete="off"
-          className="input font-mono"
-        />
-      </Field>
+        <Field
+          label="Subdomain"
+          hint="Leave empty to publish on the domain itself."
+          {...form.field('label')}
+        >
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="api"
+            spellCheck={false}
+            autoComplete="off"
+            className="input font-mono"
+          />
+        </Field>
+      </Fieldset>
 
-      {/* A route is not only ever to a container. The VMs have addresses of
-          their own, and so does this Mac — which is where somebody's dev server
-          usually is, long before it is in a container at all. */}
-      <Field label="Answers from" hint="What is behind that hostname.">
+      {/* And what is behind it. A route is not only ever to a container: the
+          VMs have addresses of their own, and so does this Mac -- which is
+          where somebody's dev server usually is, long before it is in a
+          container at all. */}
+      <Fieldset legend="Answers from">
         <SegmentedControl
           segments={KINDS}
           ariaLabel="What answers on that hostname"
@@ -241,61 +246,53 @@ export function RouteDialog({
             setPort('');
           }}
         />
-      </Field>
 
-      {kind !== 'host' && (
-        <Field
-          label={kind === 'machine' ? 'Machine' : 'Container'}
-          hint={noTargets ? undefined : 'Type to search, or name one that is not running yet.'}
-          error={noTargets ? `There are no ${kind}s on this Mac.` : form.field('target').error}
-          {...{ name: 'target', onBlur: form.field('target').onBlur }}
-        >
-          <input
-            value={target}
-            onChange={(e) => setTarget(e.target.value)}
-            list="dermaga-route-targets"
-            spellCheck={false}
-            autoComplete="off"
-            className="input font-mono"
-          />
-          <datalist id="dermaga-route-targets">
-            {ofKind.map((t) => (
-              <option key={t.name} value={t.name}>
-                {t.address ? t.address : 'not running'}
-              </option>
-            ))}
-          </datalist>
-        </Field>
-      )}
+        <div className="grid grid-cols-1 gap-x-4 gap-y-3.5 @md:grid-cols-2">
+          {kind !== 'host' && (
+            <Field
+              label={kind === 'machine' ? 'Machine' : 'Container'}
+              hint={noTargets ? undefined : 'Type to search, or name one that is not running yet.'}
+              error={noTargets ? `There are no ${kind}s on this Mac.` : form.field('target').error}
+              {...{ name: 'target', onBlur: form.field('target').onBlur }}
+            >
+              <Autocomplete
+                value={target}
+                onChange={setTarget}
+                // Where each one answers, beside its name. A datalist could be
+                // given this and WebKit threw it away, which is half the reason
+                // the list is drawn by hand now.
+                options={ofKind.map((t) => ({
+                  value: t.name,
+                  hint: t.address ? t.address : 'not running',
+                }))}
+                mono
+              />
+            </Field>
+          )}
 
-      <Field
-        label="Port"
-        hint={
-          kind === 'host'
-            ? 'The port on this Mac, as you would open it in a browser.'
-            : chosen?.ports.length
-              ? 'One route per port, so a container with several gets several.'
-              : 'Whatever it listens on. Nothing here declares it, so type it.'
-        }
-        {...form.field('port')}
-      >
-        <input
-          value={port}
-          onChange={(e) => setPort(e.target.value)}
-          list="dermaga-route-ports"
-          placeholder={kind === 'host' ? '3000' : '80'}
-          inputMode="numeric"
-          spellCheck={false}
-          autoComplete="off"
-          className="input font-mono"
-        />
-        <datalist id="dermaga-route-ports">
-          {(chosen?.ports ?? []).map((p) => (
-            <option key={p} value={p} />
-          ))}
-        </datalist>
-      </Field>
-    </Modal>
+          <Field
+            label="Port"
+            hint={
+              kind === 'host'
+                ? 'The port on this Mac, as you would open it in a browser.'
+                : chosen?.ports.length
+                  ? 'One route per port, so a container with several gets several.'
+                  : 'Whatever it listens on. Nothing here declares it, so type it.'
+            }
+            {...form.field('port')}
+          >
+            <Autocomplete
+              value={port}
+              onChange={setPort}
+              options={(chosen?.ports ?? []).map((p) => ({ value: p }))}
+              placeholder={kind === 'host' ? '3000' : '80'}
+              inputMode="numeric"
+              mono
+            />
+          </Field>
+        </div>
+      </Fieldset>
+    </FormPage>
   );
 }
 

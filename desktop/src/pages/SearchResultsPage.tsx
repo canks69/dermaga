@@ -160,6 +160,13 @@ export function SearchResultsPage() {
   const pointer = useRef({ x: -1, y: -1, live: false });
 
   const openMachine = useUIStore((s) => s.openMachine);
+  // "Create container" is a page now rather than a dialog asked for on the way
+  // to one, so the verb navigates to it like any other result does.
+  const newContainer = useUIStore((s) => s.newContainer);
+  const browseTemplates = useUIStore((s) => s.browseTemplates);
+  const buildImage = useUIStore((s) => s.buildImage);
+  const addRoute = useUIStore((s) => s.addRoute);
+  const newMachine = useUIStore((s) => s.newMachine);
   const containers = useResourceStore((s) => s.containers);
   const images = useResourceStore((s) => s.images);
   const volumes = useResourceStore((s) => s.volumes);
@@ -185,19 +192,19 @@ export function SearchResultsPage() {
       label: 'Create container',
       icon: Plus,
       keywords: 'new run start',
-      run: () => navigateWith({ name: 'containers' }, 'container.create'),
+      run: () => newContainer(),
     },
     {
       label: 'Create container from a template',
       icon: LayoutGrid,
       keywords: 'new gallery catalogue stack',
-      run: () => navigateWith({ name: 'containers' }, 'container.template'),
+      run: () => browseTemplates(),
     },
     {
       label: 'Add a route',
       icon: Globe,
       keywords: 'tunnel cloudflare publish hostname domain subdomain share expose public',
-      run: () => navigateWith({ name: 'tunnels' }, 'tunnel.route'),
+      run: () => addRoute(),
     },
     {
       label: 'Pull image',
@@ -209,7 +216,7 @@ export function SearchResultsPage() {
       label: 'Build image from a folder',
       icon: Hammer,
       keywords: 'compile context dockerfile project directory',
-      run: () => navigateWith({ name: 'images' }, 'image.build', 'folder'),
+      run: () => buildImage({ start: 'folder' }),
     },
     {
       // The same dialog, opened on its other half. Two entries because they
@@ -220,7 +227,7 @@ export function SearchResultsPage() {
       label: 'Build image from a pasted Dockerfile',
       icon: Hammer,
       keywords: 'compile paste clipboard text quick',
-      run: () => navigateWith({ name: 'images' }, 'image.build', 'paste'),
+      run: () => buildImage({ start: 'paste' }),
     },
     {
       label: 'Load image from a file',
@@ -249,7 +256,7 @@ export function SearchResultsPage() {
       label: 'Create machine',
       icon: Server,
       keywords: 'new vm linux',
-      run: () => navigateWith({ name: 'machines' }, 'machine.create'),
+      run: () => newMachine(),
     },
     {
       label: 'Sign in to a registry',
@@ -264,7 +271,7 @@ export function SearchResultsPage() {
       label: `Run ${shortImage(image.reference)}`,
       icon: Play,
       keywords: `${image.reference} new container create`,
-      run: () => navigateWith({ name: 'containers' }, 'container.create', image.reference),
+      run: () => newContainer({ image: image.reference }),
     })),
 
     ...withoutHidden(containers, showBuilder)

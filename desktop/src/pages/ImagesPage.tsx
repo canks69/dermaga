@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, FileUp, FolderOpen, Hammer, Play, ScanSearch, Trash2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Download, FileUp, Hammer, Play, ScanSearch, Trash2 } from 'lucide-react';
 import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
@@ -11,12 +11,10 @@ import {
   SelectionActions,
   type Column,
 } from '../components/DataTable';
-import { ContainerForm } from '../components/ContainerForm';
-import { Checkbox, Field, Modal } from '../components/form';
+import { Field, Modal } from '../components/form';
 import { loadImage } from '../components/ImageArchive';
 import { runTask } from '../services/tasks';
 import { api } from '../services/api';
-import { pickDirectory } from '../services/ipc';
 import { useResourceStore } from '../store/resourceStore';
 import { SeverityStrip } from '../components/PackagesPane';
 import { useScannerStore } from '../store/scannerStore';
@@ -24,10 +22,9 @@ import { useToastStore } from '../store/toastStore';
 import { PageHeader } from '../components/PageHeader';
 import { useDialog } from '../hooks/useDialog';
 import { useValidation } from '../hooks/useValidation';
-import { absolutePath, envText, imageReference, required } from '../utils/validate';
-import { DockerfileEditor } from '../components/DockerfileEditor';
-import { useUIStore, type IntentTarget } from '../store/uiStore';
-import type { BuildDrop, BuildSpec, Image } from '../types';
+import { imageReference, required } from '../utils/validate';
+import { useUIStore } from '../store/uiStore';
+import type { Image } from '../types';
 import { formatBytes, formatDuration, shortDigest } from '../utils/format';
 
 /**
@@ -98,15 +95,18 @@ export function ImagesPage() {
   const hasLoaded = useResourceStore((s) => s.hasLoaded);
   const containers = useResourceStore((s) => s.containers);
   const openImage = useUIStore((s) => s.openImage);
+  // Running an image opens the form that makes a container, on its own page,
+  // with the image already filled in. Leaving it comes back here.
+  const newContainer = useUIStore((s) => s.newContainer);
   const pushToast = useToastStore((s) => s.push);
 
   const pulling = useDialog('image.pull');
-  const building = useDialog('image.build');
+  // Building is a page of its own; this button is one of the three ways to it.
+  const buildImage = useUIStore((s) => s.buildImage);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [running, setRunning] = useState<string | null>(null);
 
   const groups = useMemo(() => groupByDigest(images), [images]);
 
@@ -201,7 +201,7 @@ export function ImagesPage() {
                 <FileUp size={16} aria-hidden />
               </button>
               <button
-                onClick={() => building.show()}
+                onClick={() => buildImage()}
                 className="btn-plain"
                 title="Build an image from a Dockerfile"
                 aria-label="Build an image from a Dockerfile"
@@ -273,7 +273,7 @@ export function ImagesPage() {
             className="border-transparent opacity-0 group-hover:opacity-100"
             title="Run a container from this image"
             aria-label={`Run ${group.names[0]}`}
-            onClick={() => setRunning(group.tags[0].reference)}
+            onClick={() => newContainer({ image: group.tags[0].reference })}
           />
         )}
       />
@@ -312,33 +312,9 @@ export function ImagesPage() {
         />
       )}
 
-      {running && <ContainerForm initial={{ image: running }} onClose={() => setRunning(null)} />}
-
       {pulling.open && <PullDialog onClose={() => pulling.close()} />}
-
-      {building.open && (
-        <BuildDialog
-          // A second Dockerfile dropped while this is open is a different
-          // dialog, not the same one with new props: the fields take their
-          // values once, at mount, so without a key of its own the drop would
-          // land on a form that quietly ignored it.
-          key={dropKey(building.target)}
-          from={building.target === 'paste' ? 'paste' : 'folder'}
-          // The other shape an intent target comes in: a Dockerfile dropped on
-          // the window, which is the folder and the filename already answered.
-          drop={building.target && typeof building.target !== 'string' ? building.target : null}
-          onClose={() => building.close()}
-        />
-      )}
     </div>
   );
-}
-
-/** What makes one opening of the build dialog a different one from the last. */
-function dropKey(target: IntentTarget | null): string {
-  if (!target || typeof target === 'string') return 'typed';
-
-  return `${target.context}/${target.dockerfile ?? ''}`;
 }
 
 /**
@@ -364,303 +340,6 @@ function VulnerabilityCell({ group }: { group: ImageGroup }) {
   // A reading, not a control: the row is what is pressed here, and the image's
   // own page is where a severity can be filtered to.
   return <SeverityStrip counts={report.summary ?? {}} />;
-}
-
-/**
- * Builds an image from a Dockerfile. The context directory is the only thing
- * required; everything else maps to a flag the CLI already understands.
- */
-function BuildDialog({
-  from: opened,
-  drop,
-  onClose,
-}: {
-  /** Which half search asked for; the toggle still moves between them. */
-  from: 'folder' | 'paste';
-  /** A Dockerfile dragged onto the window, which answers most of this. */
-  drop?: BuildDrop | null;
-  onClose: () => void;
-}) {
-  // Two ways in, one dialog. A pasted Dockerfile and a project folder are the
-  // same act with the same options -- the tag, the build args, the builder
-  // that has to be up -- and splitting them into two dialogs would mean
-  // keeping two copies of all of it in step.
-  const [from, setFrom] = useState<'folder' | 'paste'>(opened);
-  const [text, setText] = useState('');
-
-  // A drop arrives with two of the three answers already in it. The third is
-  // only a suggestion -- the folder's own name -- and it opens selected, so
-  // typing replaces it and Return accepts it.
-  const [context, setContext] = useState(drop?.context ?? '');
-  const [dockerfile, setDockerfile] = useState(drop?.dockerfile ?? '');
-  const [tag, setTag] = useState(drop?.name ?? '');
-  const [target, setTarget] = useState('');
-  const [buildArgs, setBuildArgs] = useState('');
-  const [noCache, setNoCache] = useState(false);
-
-  // Builds run inside a buildkit container that does not exist until something
-  // starts it. Knowing up front means the first build can start it rather than
-  // failing with an error about a container the user never asked for.
-  const [builderRunning, setBuilderRunning] = useState<boolean | null>(null);
-
-  // The caret belongs in the one field a drop cannot answer. Done here rather
-  // than with autoFocus because the field is only sometimes the first thing:
-  // opened from the button, the folder is what somebody has come to type.
-  const tagField = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (!drop) return;
-
-    tagField.current?.focus();
-    tagField.current?.select();
-  }, [drop]);
-
-  useEffect(() => {
-    void api
-      .getBuilder()
-      .then((status) => setBuilderRunning(status.running))
-      .catch(() => setBuilderRunning(null));
-  }, []);
-
-  const choose = async () => {
-    const chosen = await pickDirectory('Choose the build context');
-    if (chosen) setContext(chosen);
-  };
-
-  // A pasted Dockerfile that reaches for files beside it has nothing to
-  // resolve them against, so the folder field appears -- rather than the build
-  // failing on the line that uses them.
-  const pasteNeedsContext = from === 'paste' && /^\s*(copy|add)\b/im.test(text);
-
-  // Two modes asking for different things, so the rules move with them: a
-  // folder build resolves everything against its folder, and a pasted
-  // Dockerfile has none unless it reaches for one.
-  const form = useValidation({
-    context: from === 'folder' || pasteNeedsContext ? absolutePath(context, 'A folder') : null,
-    text: from === 'paste' ? required(text, 'A Dockerfile') : null,
-    tag: from === 'paste' ? (required(tag, 'A tag') ?? imageReference(tag)) : imageReference(tag),
-    buildArgs: envText(buildArgs),
-  });
-
-  const build = () => {
-    const folder = context.replace(/\/+$/, '').split('/').pop() || 'image';
-    const name = from === 'paste' ? tag.trim() : tag.trim() || folder;
-
-    const spec: BuildSpec = {
-      context: from === 'paste' && !pasteNeedsContext ? '' : context,
-      dockerfileText: from === 'paste' ? text : undefined,
-      dockerfile: from === 'paste' ? undefined : dockerfile.trim() || undefined,
-      tag: tag.trim() || undefined,
-      target: target.trim() || undefined,
-      buildArgs: buildArgs
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean),
-      noCache,
-    };
-
-    onClose();
-
-    const start = () =>
-      void runTask({
-        id: `build:${name}`,
-        kind: 'image',
-        label: name,
-        method: 'images.build',
-        params: spec,
-      });
-
-    if (builderRunning === false) {
-      // Same row, two steps: the user asked for a build, not for a lesson in
-      // how the runtime builds things.
-      void runTask({
-        id: `build:${name}`,
-        kind: 'image',
-        label: name,
-        method: 'images.startBuilder',
-        params: undefined,
-        onDone: (failed) => {
-          if (!failed) start();
-        },
-      });
-      return;
-    }
-
-    start();
-  };
-
-  return (
-    <Modal
-      title="Build image"
-      subtitle="Progress appears in the title bar; you can keep working while it builds."
-      onClose={onClose}
-      onSubmit={() => form.attempt(build)}
-      footer={
-        <>
-          <button onClick={onClose} className="btn-ghost">
-            Cancel
-          </button>
-          {/* No "build and run". A build takes minutes, by which time you are
-              somewhere else in the app -- and finishing by navigating away
-              from whatever that is, to open a form over the top of it, is the
-              same interruption as a caret jumping while you type. The image
-              lands in the list, and running it is a thing you do when you are
-              ready to. */}
-          <button onClick={() => build()} className="btn-primary" disabled={!form.valid}>
-            Build
-          </button>
-        </>
-      }
-    >
-      {/* Which of the two this is. First, because it decides what the rest of
-          the dialog even asks for. */}
-      <div className="flex gap-1 rounded-lg bg-ink-150 p-1 dark:bg-ink-800">
-        {(
-          [
-            ['folder', 'From a folder'],
-            ['paste', 'From a Dockerfile'],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            onClick={() => setFrom(value)}
-            aria-pressed={from === value}
-            className={`flex-1 rounded-md px-3 py-1.5 text-small transition-colors ${
-              from === value
-                ? 'bg-white font-medium text-ink-900 shadow-sm dark:bg-ink-950 dark:text-ink-100'
-                : 'text-ink-600 hover:text-ink-800 dark:text-ink-400 dark:hover:text-ink-100'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {from === 'paste' ? (
-        <>
-          {/* Asked first, and required. Nothing can be run without a name, and
-              asking for one after somebody has typed fifty lines is asking
-              after they have decided they are finished. Not guessed from the
-              FROM line either: python:3.12 would suggest "python", which is
-              the name of an image already in the list. */}
-          <Field
-            label="Tag"
-            hint="Names the image this builds. Required — Run needs something to start."
-            {...form.field('tag')}
-          >
-            <input
-              value={tag}
-              onChange={(e) => setTag(e.target.value)}
-              placeholder="my-api:dev"
-              autoFocus
-              className="input"
-            />
-          </Field>
-
-          <Field
-            label="Dockerfile"
-            hint="Written to a directory of its own for the build, and removed when it finishes."
-            {...form.field('text')}
-          >
-            <DockerfileEditor value={text} onChange={setText} />
-          </Field>
-
-          {pasteNeedsContext && (
-            <Field
-              label="Context"
-              hint="COPY and ADD need a folder to resolve against. A pasted Dockerfile has none of its own."
-              {...form.field('context')}
-            >
-              <div className="flex gap-2">
-                <input
-                  value={context}
-                  onChange={(e) => setContext(e.target.value)}
-                  placeholder="/Users/you/projects/api"
-                  className="input flex-1"
-                />
-                <button onClick={() => void choose()} className="btn-ghost shrink-0">
-                  <FolderOpen size={13} aria-hidden />
-                  Choose…
-                </button>
-              </div>
-            </Field>
-          )}
-        </>
-      ) : (
-        <>
-          <Field
-            label="Context"
-            hint="The folder COPY and ADD paths are resolved from."
-            {...form.field('context')}
-          >
-            <div className="flex gap-2">
-              <input
-                value={context}
-                onChange={(e) => setContext(e.target.value)}
-                placeholder="/Users/you/projects/api"
-                autoFocus={!drop}
-                className="input flex-1"
-              />
-              <button onClick={() => void choose()} className="btn-ghost shrink-0">
-                <FolderOpen size={13} aria-hidden />
-                Choose…
-              </button>
-            </div>
-          </Field>
-
-          <Field
-            label="Tag"
-            hint="Names the result, for example api:dev. Optional."
-            {...form.field('tag')}
-          >
-            <input
-              ref={tagField}
-              value={tag}
-              onChange={(e) => setTag(e.target.value)}
-              placeholder="api:dev"
-              className="input"
-            />
-          </Field>
-
-          <Field label="Dockerfile" hint="Relative to the context. Defaults to ./Dockerfile.">
-            <input
-              value={dockerfile}
-              onChange={(e) => setDockerfile(e.target.value)}
-              placeholder="Dockerfile"
-              className="input"
-            />
-          </Field>
-        </>
-      )}
-
-      <Field label="Target stage" hint="Stops at a named stage in a multi-stage build. Optional.">
-        <input
-          value={target}
-          onChange={(e) => setTarget(e.target.value)}
-          placeholder="builder"
-          className="input"
-        />
-      </Field>
-
-      <Field label="Build arguments" hint="One KEY=value per line." {...form.field('buildArgs')}>
-        <textarea
-          value={buildArgs}
-          onChange={(e) => setBuildArgs(e.target.value)}
-          rows={4}
-          placeholder={'VERSION=1.2.3\nNODE_ENV=production'}
-          className="textarea font-mono"
-        />
-      </Field>
-
-      <Checkbox checked={noCache} onChange={setNoCache} label="Build without the cache" />
-
-      {builderRunning === false && (
-        <p className="text-tiny text-ink-600 dark:text-ink-400">
-          The build container is not running yet. Dermaga will start it first — the first build
-          takes a little longer because of it.
-        </p>
-      )}
-    </Modal>
-  );
 }
 
 /** Just the reference: the pull itself reports progress in the list. */

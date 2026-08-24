@@ -51,14 +51,14 @@ const NAV: NavGroup[] = [
     entries: [
       {
         target: { name: 'containers' },
-        owns: ['containers', 'container'],
+        owns: ['containers', 'container', 'container-new', 'container-edit', 'templates'],
         icon: Boxes,
         label: 'Containers',
         count: 'containers',
       },
       {
         target: { name: 'images' },
-        owns: ['images', 'image'],
+        owns: ['images', 'image', 'image-build'],
         icon: Layers,
         label: 'Images',
         count: 'images',
@@ -85,14 +85,14 @@ const NAV: NavGroup[] = [
       },
       {
         target: { name: 'tunnels' },
-        owns: ['tunnels'],
+        owns: ['tunnels', 'tunnel-route'],
         icon: Globe,
         label: 'Tunnels',
         beta: true,
       },
       {
         target: { name: 'machines' },
-        owns: ['machines', 'machine'],
+        owns: ['machines', 'machine', 'machine-new'],
         icon: Server,
         label: 'Machines',
         count: 'machines',

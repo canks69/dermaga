@@ -11,8 +11,6 @@ import {
   Square,
   Trash2,
 } from 'lucide-react';
-import { ContainerForm } from '../components/ContainerForm';
-import { TemplateGallery } from '../components/TemplateGallery';
 import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DataTable, Muted, NameCell, SelectionActions, type Column } from '../components/DataTable';
@@ -27,9 +25,8 @@ import { useSettingsStore } from '../store/settingsStore';
 import { isBuilder } from '../utils/builder';
 import { PageHeader } from '../components/PageHeader';
 import { FilterToggle } from '../components/FilterToggle';
-import { useDialog } from '../hooks/useDialog';
 import { useUIStore } from '../store/uiStore';
-import type { ContainerSpec, Container } from '../types';
+import type { Container } from '../types';
 import { formatDuration, formatMemory, parseMebibytes, shortImage } from '../utils/format';
 
 // What is worth knowing about a container without opening it: what it is and
@@ -62,15 +59,11 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
   const showBuilder = useSettingsStore((s) => s.showBuilder);
   const setShowBuilder = useSettingsStore((s) => s.setShowBuilder);
   const openContainer = useUIStore((s) => s.openContainer);
-  const creating = useDialog('container.create');
-  // Picked before the form opens rather than applied to it afterwards: the form
-  // takes its values at mount, and filling one in from the outside would mean
-  // setting a dozen pieces of state and hoping.
-  // Opened from the button here, or from the palette, which navigates to this
-  // page carrying the intent.
-  const browsingIntent = useDialog('container.template');
-  const [browsing, setBrowsing] = useState(false);
-  const [fromTemplate, setFromTemplate] = useState<Partial<ContainerSpec> | null>(null);
+  // Creating is a page of its own, and a template is what that page opens
+  // with: the form takes its values at mount, so what it starts from travels
+  // with the navigation rather than being set into it afterwards.
+  const newContainer = useUIStore((s) => s.newContainer);
+  const browseTemplates = useUIStore((s) => s.browseTemplates);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   // Holds the verb of the running bulk action, so its button can spin.
@@ -248,7 +241,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
               />
 
               <button
-                onClick={() => setBrowsing(true)}
+                onClick={browseTemplates}
                 className="btn-plain"
                 title="Start from a template"
                 aria-label="Start from a template"
@@ -256,10 +249,7 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
                 <LayoutGrid size={16} aria-hidden />
               </button>
               <button
-                onClick={() => {
-                  setFromTemplate(null);
-                  creating.show();
-                }}
+                onClick={() => newContainer()}
                 className="btn-plain-primary"
                 title="New container"
                 aria-label="New container"
@@ -351,40 +341,6 @@ export function ContainersPage({ runtimeMissing }: { runtimeMissing: boolean }) 
             <PortMenu container={container} at={portsMenu.at} onClose={closePortsMenu} />
           ) : null;
         })()}
-
-      {/* Creating does not navigate: the new container appears in this list,
-          and being thrown into its detail page interrupts what you were doing. */}
-      {(browsing || browsingIntent.open) && (
-        <TemplateGallery
-          onPick={(spec) => {
-            setFromTemplate(spec);
-            setBrowsing(false);
-            browsingIntent.close();
-            creating.show();
-          }}
-          onClose={() => {
-            setBrowsing(false);
-            browsingIntent.close();
-          }}
-        />
-      )}
-
-      {creating.open && (
-        <ContainerForm
-          // An intent that names an image opens the form on it. The other
-          // shape an intent target comes in -- a dropped Dockerfile -- belongs
-          // to the build dialog and never arrives here.
-          initial={
-            typeof creating.target === 'string'
-              ? { image: creating.target }
-              : (fromTemplate ?? undefined)
-          }
-          onClose={() => {
-            creating.close();
-            setFromTemplate(null);
-          }}
-        />
-      )}
 
       {confirmingRecreate && (
         <ConfirmDialog

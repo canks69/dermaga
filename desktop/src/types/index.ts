@@ -726,6 +726,57 @@ export type MachineTab = 'overview' | 'logs' | 'terminal';
 export type Route =
   | { name: 'containers' }
   | { name: 'container'; id: string; tab: ContainerTab; path?: string }
+  /**
+   * The form that makes a container, which is a page rather than a dialog: it
+   * is the longest form in the app -- name, image, limits, networks, ports,
+   * mounts, environment -- and a panel floating over the list it will appear
+   * in had to scroll inside itself to show half of it.
+   *
+   * It carries what to open with, because there is more than one way in: a
+   * template picked from the gallery, or an image run from its own page. And
+   * where to go back to, so leaving returns to whichever of those it was
+   * rather than always to the container list.
+   */
+  | { name: 'container-new'; initial?: Partial<ContainerSpec>; from?: Route }
+  /**
+   * The same form over an existing container, and a page for the same reason.
+   * It carries the spec rather than the id alone because that spec is read
+   * from the server -- with an unfinished edit preferred over it -- before the
+   * form is opened at all, and reading it twice would mean a page that opens
+   * empty and fills in underneath whoever is already typing into it.
+   */
+  | {
+      name: 'container-edit';
+      id: string;
+      initial: ContainerSpec;
+      resumed?: PendingEdit;
+      from?: Route;
+    }
+  /**
+   * The catalogue the create form can be started from. A page because it is a
+   * catalogue: read through, compared across, and left by going somewhere --
+   * the form, filled in from whichever one was picked.
+   */
+  | { name: 'templates'; from?: Route }
+  /**
+   * The build form. Three ways in -- the button on the image list, a search
+   * that asked for one half of it, and a Dockerfile dropped anywhere on the
+   * window -- so it carries which half to open on, what the drop already
+   * answered, and where the person was when it opened.
+   */
+  | { name: 'image-build'; start?: 'folder' | 'paste'; drop?: BuildDrop; from?: Route }
+  /**
+   * What one run is printing, live. Its id is the window's own name for the
+   * run rather than the agent's, which is what the task list is keyed by.
+   */
+  | { name: 'task'; id: string; from?: Route }
+  /**
+   * The form that publishes a hostname. It carries the route being moved,
+   * when it is a move: the same form, naming what it replaces.
+   */
+  | { name: 'tunnel-route'; editing?: TunnelRoute; from?: Route }
+  /** The form that makes a Linux VM, which is a pull and a boot to watch. */
+  | { name: 'machine-new'; from?: Route }
   | { name: 'images' }
   | { name: 'image'; reference: string }
   | { name: 'volumes' }
