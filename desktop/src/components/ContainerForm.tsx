@@ -7,7 +7,8 @@ import type { PendingEdit, ContainerSpec } from '../types';
 import { Checkbox, Field, Fieldset, FormPage, Row } from './form';
 import { Button } from './Button';
 import { ConfirmDialog } from './ConfirmDialog';
-import { formatMemory, list } from '../utils/format';
+import { Autocomplete } from './Autocomplete';
+import { formatBytes, formatMemory, list } from '../utils/format';
 import { useValidation } from '../hooks/useValidation';
 import {
   absolutePath,
@@ -412,18 +413,19 @@ export function ContainerForm({
           hint="Pick a local image or type any reference."
           {...form.field('image')}
         >
-          <input
+          <Autocomplete
             value={image}
-            onChange={(e) => setImage(e.target.value)}
-            list="dermaga-images"
+            onChange={setImage}
+            // What is on this Mac, with what it costs to keep -- the same two
+            // things the Images page is read for. Anything else can still be
+            // typed: a reference that is not here yet is pulled by the run.
+            options={images.map((img) => ({
+              value: img.reference,
+              hint: formatBytes(img.sizeInBytes),
+            }))}
             placeholder="docker.io/library/redis:8.10"
-            className="input"
+            mono
           />
-          <datalist id="dermaga-images">
-            {images.map((img) => (
-              <option key={img.reference} value={img.reference} />
-            ))}
-          </datalist>
         </Field>
 
         <Field label="CPUs" {...form.field('cpus')}>
@@ -608,16 +610,22 @@ export function ContainerForm({
               <option value="volume">volume</option>
               <option value="bind">bind</option>
             </select>
-            <input
+            <Autocomplete
               value={mount.source}
-              onChange={(e) =>
-                setMounts(
-                  mounts.map((m, i) => (i === index ? { ...m, source: e.target.value } : m))
-                )
+              onChange={(next) =>
+                setMounts(mounts.map((m, i) => (i === index ? { ...m, source: next } : m)))
               }
-              list={mount.type === 'volume' ? 'dermaga-volumes' : undefined}
+              // Volumes are a list to pick from; a path on this Mac is not,
+              // and a field that suggests nothing simply does not suggest.
+              options={
+                mount.type === 'volume'
+                  ? volumes.map((v) => ({ value: v.name, hint: formatBytes(v.usedBytes) }))
+                  : []
+              }
               placeholder={mount.type === 'volume' ? 'volume name' : '/host/path'}
-              className="input min-w-36 flex-1"
+              aria-label={mount.type === 'volume' ? 'Volume name' : 'Path on this Mac'}
+              className="min-w-36 flex-1"
+              mono
             />
             <span className="text-xs text-ink-500">→</span>
             <input
@@ -639,11 +647,6 @@ export function ContainerForm({
             />
           </Row>
         ))}
-        <datalist id="dermaga-volumes">
-          {volumes.map((v) => (
-            <option key={v.name} value={v.name} />
-          ))}
-        </datalist>
       </Fieldset>
 
       <Fieldset
