@@ -31,6 +31,51 @@
 }
 
 @layer base {
+  /* The frame, in the light. Under the ground the panels are laid on -- chrome,
+     then ground, then paper, the same three steps the dark theme makes going
+     the other way.
+     
+     Further under it than the dark theme's own step, though, and deliberately:
+     the same few percent that separates a near-black frame from a near-black
+     ground separates nothing at all up here, where the eye reads differences
+     between light tones as smaller than they are. At a hair under the ground
+     the sidebar was not a frame, it was a smudge; this is the depth that
+     actually reads as one. */
+  :root {
+    --chrome-bg: #e7e3e0;
+    --chrome-raised: #dbd5d1;
+    --chrome-line: #dad4d0;
+    --chrome-track: #cbc4bf;
+    --chrome-text: #221d1f;
+    --chrome-muted: #413c3a;
+    --chrome-dim: #6b6562;
+    --chrome-faint: #867f7c;
+    /* Where the frame meets the content. A hairline of the same family, not
+       black: black against a light frame is a rule drawn twice as hard as
+       every other rule in the window. It can be quiet, too -- the fill either
+       side of it is already doing the separating. */
+    --chrome-edge: #dad4d0;
+    /* The one thing on the frame that is typed into. On a grey frame a field
+       reads as a well cut into it rather than as another raised chip -- which
+       is the same thing `raised` does in the dark, where lighter is the
+       direction away from the ground. */
+    --chrome-well: #f2f0ee;
+  }
+
+  /* And in the dark, where it is the near-black it has always been. */
+  .dark {
+    --chrome-bg: #171416;
+    --chrome-raised: #221d1f;
+    --chrome-line: #332c2e;
+    --chrome-track: #373033;
+    --chrome-text: #f2efee;
+    --chrome-muted: #cfc9c6;
+    --chrome-dim: #9a9390;
+    --chrome-faint: #6f6764;
+    --chrome-edge: #0d0b0c;
+    --chrome-well: #221d1f;
+  }
+
   * {
     margin: 0;
     padding: 0;

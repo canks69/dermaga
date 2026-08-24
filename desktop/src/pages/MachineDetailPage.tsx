@@ -307,7 +307,7 @@ function InspectTab({ machine }: { machine: Machine }) {
 
       {raw ? (
         <div className="flex min-h-0 flex-1 flex-col px-7 pb-4 pt-2.5">
-          <pre className="selectable min-h-0 flex-1 overflow-auto rounded-xl bg-chrome-bg p-4 font-mono text-code leading-[1.7] text-chrome-muted">
+          <pre className="selectable min-h-0 flex-1 overflow-auto rounded-xl bg-terminal-bg p-4 font-mono text-code leading-[1.7] text-terminal-muted">
             {json}
           </pre>
         </div>

@@ -69,7 +69,7 @@ export function KernelStatusItem() {
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         title="No Linux kernel is configured"
-        className="no-drag flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-amber-500 transition-colors hover:bg-chrome-raised"
+        className="no-drag flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-500 transition-colors hover:bg-chrome-raised"
       >
         <TriangleAlert size={12} aria-hidden />
         No Linux kernel

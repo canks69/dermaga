@@ -91,7 +91,7 @@ export function TaskLogPage({ route }: { route: Extract<Route, { name: 'task' }>
         // has defined and every coloured run comes out as plain text. The
         // theme-following palette rather than the terminal one: this box is
         // the page's own paper, not an inset cut into it.
-        className="selectable min-h-0 flex-1 overflow-auto bg-ink-50 px-7 py-5 font-mono text-tiny leading-relaxed dark:bg-ink-950"
+        className="ansi selectable min-h-0 flex-1 overflow-auto bg-ink-50 px-7 py-5 font-mono text-tiny leading-relaxed dark:bg-ink-950"
       >
         {!task ? (
           <p className="text-ink-500">Nothing is running under that name any more.</p>
