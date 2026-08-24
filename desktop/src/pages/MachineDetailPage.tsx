@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Button, IconButton } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { MachineSettingsDialog } from '../components/MachineForm';
+import { MachineSettingsDialog } from '../components/MachineSettingsDialog';
 import { LogPane } from '../components/LogPane';
 import { DefaultStar, StatusText } from '../components/StatusBadge';
 import {

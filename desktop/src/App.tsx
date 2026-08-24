@@ -3,6 +3,7 @@ import { Hammer } from 'lucide-react';
 import { HelpView } from './components/HelpView';
 import { LicencesPage } from './pages/LicencesPage';
 import { RegistriesPage } from './pages/RegistriesPage';
+import { TunnelRoutePage } from './pages/TunnelRoutePage';
 import { TunnelsPage } from './pages/TunnelsPage';
 import { SettingsPanel } from './components/SettingsPanel';
 import { Sidebar } from './components/Sidebar';
@@ -15,26 +16,32 @@ import {
   takePendingOpen,
   takePendingTask,
 } from './services/ipc';
-import { useTaskStore } from './store/taskStore';
+
 import { subscribeToScanner } from './store/scannerStore';
-import { restoreTasks, watchAnnouncements } from './services/tasks';
+import { openTaskLog, restoreTasks, watchAnnouncements } from './services/tasks';
 import { useSettingsStore } from './store/settingsStore';
 import { useEventStream } from './hooks/useEventStream';
 import { useFileDrop } from './hooks/useFileDrop';
 import { useTheme } from './hooks/useTheme';
 import { api } from './services/api';
 import { ChangelogPage } from './pages/ChangelogPage';
+import { ContainerCreatePage } from './pages/ContainerCreatePage';
 import { ContainerDetailPage } from './pages/ContainerDetailPage';
+import { ContainerEditPage } from './pages/ContainerEditPage';
 import { ContainersPage } from './pages/ContainersPage';
+import { ImageBuildPage } from './pages/ImageBuildPage';
 import { ImageDetailPage } from './pages/ImageDetailPage';
 import { ImagesPage } from './pages/ImagesPage';
+import { MachineCreatePage } from './pages/MachineCreatePage';
 import { MachineDetailPage } from './pages/MachineDetailPage';
 import { MachinesPage } from './pages/MachinesPage';
 import { NetworkDetailPage } from './pages/NetworkDetailPage';
 import { NetworksPage } from './pages/NetworksPage';
 import { SearchResultsPage } from './pages/SearchResultsPage';
+import { TemplatesPage } from './pages/TemplatesPage';
 import { ServicesOffline } from './pages/ServicesOffline';
 import { SystemPage } from './pages/SystemPage';
+import { TaskLogPage } from './pages/TaskLogPage';
 import { VolumeDetailPage } from './pages/VolumeDetailPage';
 import { VolumesPage } from './pages/VolumesPage';
 import { useResourceStore } from './store/resourceStore';
@@ -77,11 +84,11 @@ export function App() {
 
   // And clicking one about a finished build opens what it printed -- the same
   // door the toast in the corner opens, from the other side of the app.
-  useEffect(() => onOpenTask((id) => useTaskStore.getState().inspect(id)), []);
+  useEffect(() => onOpenTask((id) => openTaskLog(id)), []);
 
   useEffect(() => {
     void takePendingTask().then((id) => {
-      if (id) useTaskStore.getState().inspect(id);
+      if (id) openTaskLog(id);
     });
   }, []);
 
@@ -140,6 +147,10 @@ export function App() {
   // or machine disappears, fall back to its list.
   const selectedContainer =
     route.name === 'container' ? containers.find((c) => c.id === route.id) : undefined;
+  // The form that edits one is the same case: it would be saving to something
+  // that is no longer there.
+  const editedContainer =
+    route.name === 'container-edit' ? containers.find((c) => c.id === route.id) : undefined;
   const selectedMachine =
     route.name === 'machine' ? machines.find((m) => m.id === route.id) : undefined;
   const selectedNetwork =
@@ -149,6 +160,9 @@ export function App() {
 
   useEffect(() => {
     if (route.name === 'container' && containers.length > 0 && !selectedContainer) {
+      navigate({ name: 'containers' });
+    }
+    if (route.name === 'container-edit' && containers.length > 0 && !editedContainer) {
       navigate({ name: 'containers' });
     }
     if (route.name === 'machine' && machines.length > 0 && !selectedMachine) {
@@ -167,6 +181,7 @@ export function App() {
     networks.length,
     volumes.length,
     selectedContainer,
+    editedContainer,
     selectedMachine,
     selectedNetwork,
     selectedVolume,
@@ -219,6 +234,12 @@ export function App() {
               <>
                 {route.name === 'containers' && <ContainersPage runtimeMissing={runtimeMissing} />}
 
+                {route.name === 'container-new' && <ContainerCreatePage route={route} />}
+
+                {route.name === 'container-edit' && <ContainerEditPage route={route} />}
+
+                {route.name === 'templates' && <TemplatesPage route={route} />}
+
                 {route.name === 'container' &&
                   (selectedContainer ? (
                     <ContainerDetailPage
@@ -231,6 +252,10 @@ export function App() {
                   ))}
 
                 {route.name === 'images' && <ImagesPage />}
+
+                {route.name === 'image-build' && <ImageBuildPage route={route} />}
+
+                {route.name === 'task' && <TaskLogPage route={route} />}
 
                 {route.name === 'image' && <ImageDetailPage reference={route.reference} />}
 
@@ -245,6 +270,8 @@ export function App() {
                   (selectedNetwork ? <NetworkDetailPage network={selectedNetwork} /> : <Loading />)}
 
                 {route.name === 'machines' && <MachinesPage runtimeMissing={runtimeMissing} />}
+
+                {route.name === 'machine-new' && <MachineCreatePage />}
 
                 {route.name === 'machine' &&
                   (selectedMachine ? (
@@ -265,6 +292,7 @@ export function App() {
 
                 {route.name === 'registries' && <RegistriesPage />}
                 {route.name === 'tunnels' && <TunnelsPage />}
+                {route.name === 'tunnel-route' && <TunnelRoutePage route={route} />}
 
                 {route.name === 'licences' && <LicencesPage />}
               </>

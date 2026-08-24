@@ -6,13 +6,11 @@ import { CommandProgress, useCommandProgress } from '../components/CommandProgre
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Field, Modal } from '../components/form';
 import { PageHeader } from '../components/PageHeader';
-import { RouteDialog } from '../components/RouteDialog';
 import { TunnelTopology } from '../components/TunnelTopology';
 import { api } from '../services/api';
 import { openExternal } from '../services/ipc';
 import { useToastStore } from '../store/toastStore';
 import { useResourceStore } from '../store/resourceStore';
-import { useDialog } from '../hooks/useDialog';
 import { useUIStore } from '../store/uiStore';
 import type { TunnelRoute, TunnelsStatus } from '../types';
 
@@ -33,8 +31,10 @@ export function TunnelsPage() {
   const [status, setStatus] = useState<TunnelsStatus | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
-  const adding = useDialog('tunnel.route');
-  const [editing, setEditing] = useState<TunnelRoute | null>(null);
+  // Adding and moving are the same form, and it is a page: it asks Cloudflare
+  // for its lists before it can be answered, and a panel doing that over the
+  // picture covers the one thing worth looking at while deciding.
+  const addRoute = useUIStore((s) => s.addRoute);
   const [removing, setRemoving] = useState<TunnelRoute | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const navigate = useUIStore((s) => s.navigate);
@@ -123,7 +123,7 @@ export function TunnelsPage() {
           connected ? (
             <>
               <button
-                onClick={() => adding.show()}
+                onClick={() => addRoute()}
                 disabled={!ready}
                 className="btn-plain-primary"
                 title="Add a route"
@@ -241,27 +241,12 @@ export function TunnelsPage() {
                 navigate({ name: 'container', id: container, tab: 'overview' })
               }
               onOpenRoute={(route) => void openExternal(route.url ?? `https://${route.hostname}`)}
-              onMoveRoute={(route) => setEditing(route)}
+              onMoveRoute={(route) => addRoute(route)}
               onRemoveRoute={(route) => setRemoving(route)}
             />
           </>
         )}
       </div>
-
-      {((adding.open && ready) || editing) && (
-        <RouteDialog
-          editing={editing}
-          onClose={() => {
-            adding.close();
-            setEditing(null);
-          }}
-          onDone={() => {
-            adding.close();
-            setEditing(null);
-            load();
-          }}
-        />
-      )}
 
       {removing && (
         <ConfirmDialog

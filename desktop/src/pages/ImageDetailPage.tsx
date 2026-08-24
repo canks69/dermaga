@@ -11,7 +11,6 @@ import {
   X,
 } from 'lucide-react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { ContainerForm } from '../components/ContainerForm';
 import { Badge } from '../components/DataTable';
 import { IconButton } from '../components/Button';
 import {
@@ -73,10 +72,12 @@ export function ImageDetailPage({ reference }: { reference: string }) {
   // Bumped after a tag is removed, so the inspect runs again.
   const [reloads, setReloads] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [running, setRunning] = useState(false);
 
   const back = useUIStore((s) => s.back);
   const openContainer = useUIStore((s) => s.openContainer);
+  // Running this image is the form that makes a container, on its own page,
+  // opened on this image. Leaving it comes back to this page.
+  const newContainer = useUIStore((s) => s.newContainer);
   const images = useResourceStore((s) => s.images);
   const containers = useResourceStore((s) => s.containers);
   const pushToast = useToastStore((s) => s.push);
@@ -159,7 +160,7 @@ export function ImageDetailPage({ reference }: { reference: string }) {
           {/* The first thing anyone wants from an image, and until now the one
               thing this page could not do. */}
           <button
-            onClick={() => setRunning(true)}
+            onClick={() => newContainer({ image: reference })}
             className="btn-plain"
             title="Run a container from this image"
             aria-label="Run a container from this image"
@@ -276,10 +277,6 @@ export function ImageDetailPage({ reference }: { reference: string }) {
           </div>
         )}
       </DetailBody>
-
-      {running && (
-        <ContainerForm initial={{ image: reference }} onClose={() => setRunning(false)} />
-      )}
 
       {pushing && <PushDialog reference={reference} onClose={() => setPushing(false)} />}
 

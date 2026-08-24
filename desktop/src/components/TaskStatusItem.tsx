@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Ban, CircleAlert, CircleCheck, ListChecks, Loader2, ScrollText, X } from 'lucide-react';
+import { Ban, CircleAlert, CircleCheck, ListChecks, Loader2, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { Modal } from './form';
-import { cancelTask, dismissTask } from '../services/tasks';
+import { cancelTask, dismissTask, openTaskLog } from '../services/tasks';
 import { useTaskStore } from '../store/taskStore';
 
 /** One verb in a row, drawn as its icon and named in its tooltip. */
@@ -65,9 +64,6 @@ function summarise(running: number, failed: number, total: number): string {
 export function TaskStatusItem() {
   const tasks = useTaskStore((s) => s.tasks);
   const [open, setOpen] = useState(false);
-  const inspectingId = useTaskStore((s) => s.inspecting);
-  const inspect = useTaskStore((s) => s.inspect);
-  const inspecting = tasks.find((task) => task.id === inspectingId) ?? null;
   const wrapper = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -97,36 +93,6 @@ export function TaskStatusItem() {
   // Anything that has stopped, either way. Running work is not something to
   // put away -- it is still arriving.
   const finished = tasks.filter((task) => task.status !== 'running');
-
-  const details = inspecting && (
-    <Modal
-      wide
-      title={inspecting.status === 'failed' ? `${inspecting.label} failed` : inspecting.label}
-      subtitle={
-        inspecting.status === 'failed'
-          ? inspecting.error
-          : 'Everything the command printed, from the top.'
-      }
-      onClose={() => inspect(null)}
-      footer={
-        <button onClick={() => inspect(null)} className="btn-ghost">
-          Close
-        </button>
-      }
-    >
-      <div className="selectable max-h-96 overflow-auto rounded-md border border-ink-200 bg-ink-50 p-3 font-mono text-tiny leading-relaxed dark:border-ink-700 dark:bg-ink-950">
-        {inspecting.lines.length === 0 ? (
-          <p className="text-ink-500">The command produced no output.</p>
-        ) : (
-          inspecting.lines.map((line, index) => (
-            <p key={index} className="whitespace-pre-wrap break-all">
-              {line}
-            </p>
-          ))
-        )}
-      </div>
-    </Modal>
-  );
 
   return (
     <div ref={wrapper} className="relative">
@@ -177,70 +143,91 @@ export function TaskStatusItem() {
 
           <ul className="flex max-h-80 flex-col gap-0.5 overflow-y-auto overscroll-contain">
             {tasks.map((task) => (
-              <li key={task.id} className="flex items-start gap-2.5 rounded-lg px-2 py-1.5">
-                {task.status === 'failed' ? (
-                  <CircleAlert
-                    size={13}
-                    className="mt-0.5 shrink-0 text-brand-600 dark:text-brand-400"
-                    aria-hidden
-                  />
-                ) : task.status === 'done' ? (
-                  <CircleCheck
-                    size={13}
-                    className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-500"
-                    aria-hidden
-                  />
-                ) : (
-                  <Loader2
-                    size={13}
-                    className="mt-0.5 shrink-0 animate-spin text-ink-500"
-                    aria-hidden
-                  />
-                )}
+              // The whole row opens what the run printed -- running or
+              // finished, a build or a pull. It used to take the small scroll
+              // icon on the right, which is the least likely place to press on
+              // a row whose whole point is the thing it is reporting; and a
+              // running build, the one people watch, had no way in at all.
+              <li
+                key={task.id}
+                className="flex items-start gap-1 rounded-lg transition-colors hover:bg-ink-100 dark:hover:bg-ink-800"
+              >
+                <button
+                  onClick={() => {
+                    openTaskLog(task.id);
+                    setOpen(false);
+                  }}
+                  title={`Everything ${task.label} printed`}
+                  className="flex min-w-0 flex-1 items-start gap-2.5 rounded-lg px-2 py-1.5 text-left"
+                >
+                  {task.status === 'failed' ? (
+                    <CircleAlert
+                      size={13}
+                      className="mt-0.5 shrink-0 text-brand-600 dark:text-brand-400"
+                      aria-hidden
+                    />
+                  ) : task.status === 'done' ? (
+                    <CircleCheck
+                      size={13}
+                      className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-500"
+                      aria-hidden
+                    />
+                  ) : (
+                    <Loader2
+                      size={13}
+                      className="mt-0.5 shrink-0 animate-spin text-ink-500"
+                      aria-hidden
+                    />
+                  )}
 
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-small font-medium">{task.label}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-small font-medium">{task.label}</p>
 
-                  <p
-                    className={`truncate text-tiny ${
-                      task.status === 'failed'
-                        ? 'text-brand-600 dark:text-brand-400'
-                        : 'text-ink-600 dark:text-ink-400'
-                    }`}
-                  >
-                    {task.status === 'failed' ? (task.error ?? 'Failed') : task.step || 'Working…'}
-                    {/* The counted part, where the CLI gives one: a build says
+                    <p
+                      className={`truncate text-tiny ${
+                        task.status === 'failed'
+                          ? 'text-brand-600 dark:text-brand-400'
+                          : 'text-ink-600 dark:text-ink-400'
+                      }`}
+                    >
+                      {task.status === 'failed'
+                        ? (task.error ?? 'Failed')
+                        : task.step || 'Working…'}
+                      {/* The counted part, where the CLI gives one: a build says
                         which step of how many, a pull how many layers are
                         down. "Fetching image" alone answers what it is doing
                         and not how much of it is left. */}
-                    {task.status === 'running' && task.total
-                      ? ` · ${task.current ?? 0}/${task.total}`
-                      : ''}
-                  </p>
+                      {task.status === 'running' && task.total
+                        ? ` · ${task.current ?? 0}/${task.total}`
+                        : ''}
+                    </p>
 
-                  {task.status === 'running' && (
-                    // Determinate when the numbers are known, and a pulse when
-                    // they are not -- rather than a bar sitting at zero, which
-                    // reads as stuck.
-                    <div className="mt-1 h-0.75 w-full overflow-hidden rounded-full bg-ink-200 dark:bg-ink-800">
-                      <div
-                        className={`h-full rounded-full bg-brand-600 transition-[width] duration-300 ${
-                          task.total ? '' : 'w-1/3 animate-pulse'
-                        }`}
-                        style={
-                          task.total
-                            ? { width: `${Math.round(((task.current ?? 0) / task.total) * 100)}%` }
-                            : undefined
-                        }
-                      />
-                    </div>
-                  )}
-                </div>
+                    {task.status === 'running' && (
+                      // Determinate when the numbers are known, and a pulse when
+                      // they are not -- rather than a bar sitting at zero, which
+                      // reads as stuck.
+                      <div className="mt-1 h-0.75 w-full overflow-hidden rounded-full bg-ink-200 dark:bg-ink-800">
+                        <div
+                          className={`h-full rounded-full bg-brand-600 transition-[width] duration-300 ${
+                            task.total ? '' : 'w-1/3 animate-pulse'
+                          }`}
+                          style={
+                            task.total
+                              ? {
+                                  width: `${Math.round(((task.current ?? 0) / task.total) * 100)}%`,
+                                }
+                              : undefined
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                </button>
 
-                {/* Icons, with their words as the tooltip, like every other
-                    row of actions in this window. Three verbs written out beside
-                    a name made the name the smallest thing in its own row. */}
-                <div className="flex shrink-0 items-center gap-0.5">
+                {/* The one verb the row itself is not. Icons, with their words
+                    as the tooltip, like every other row of actions in this
+                    window. */}
+                <div className="flex shrink-0 items-center gap-0.5 py-1.5 pr-1">
                   {task.status === 'running' ? (
                     // Called off, not failed. Whatever it was doing stops the
                     // way Ctrl-C would stop the same command in a terminal.
@@ -250,24 +237,11 @@ export function TaskStatusItem() {
                       onClick={() => cancelTask(task.id)}
                     />
                   ) : (
-                    <>
-                      {/* Kept for a failure whose one-line summary does not
-                          explain itself -- and for a build that worked, where
-                          the output is the only record of how it was made. */}
-                      <RowAction
-                        icon={ScrollText}
-                        label={`Output of ${task.label}`}
-                        onClick={() => {
-                          inspect(task.id);
-                          setOpen(false);
-                        }}
-                      />
-                      <RowAction
-                        icon={X}
-                        label={`Dismiss ${task.label}`}
-                        onClick={() => dismissTask(task.id)}
-                      />
-                    </>
+                    <RowAction
+                      icon={X}
+                      label={`Dismiss ${task.label}`}
+                      onClick={() => dismissTask(task.id)}
+                    />
                   )}
                 </div>
               </li>
@@ -291,8 +265,6 @@ export function TaskStatusItem() {
           )}
         </div>
       )}
-
-      {details}
     </div>
   );
 }

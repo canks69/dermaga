@@ -30,16 +30,6 @@ export interface Task {
 
 interface TaskState {
   tasks: Task[];
-  /**
-   * The task whose output is open, if any.
-   *
-   * Here rather than inside the panel that draws it, because the panel is not
-   * the only way in any more: a failure raises a toast in the corner, and
-   * clicking that has to be able to open the same window.
-   */
-  inspecting: string | null;
-  /** Takes either name: the window's own, or the agent's. */
-  inspect: (id: string | null) => void;
   /** Notes the agent's name for a run once it has one. */
   name: (id: string, streamId: string) => void;
   /** Fills the list from what the agent kept of earlier runs. */
@@ -65,12 +55,6 @@ const maxLines = 20000;
 
 export const useTaskStore = create<TaskState>((set) => ({
   tasks: [],
-  inspecting: null,
-  inspect: (id) =>
-    set((state) => ({
-      inspecting:
-        id === null ? null : (state.tasks.find((t) => t.id === id || t.streamId === id)?.id ?? id),
-    })),
   name: (id, streamId) =>
     set((state) => ({
       tasks: state.tasks.map((task) => (task.id === id ? { ...task, streamId } : task)),

@@ -75,12 +75,26 @@ function shelve(id: string) {
  * Pressing it opens whatever the news was about: the container that stopped, or
  * what the finished command printed. The same door its notification opens.
  */
+/**
+ * Opens what a run printed, by either name it goes by.
+ *
+ * The window files a task under something a person would recognise -- so
+ * building the same tag twice replaces the row rather than stacking it -- and
+ * the agent knows only its own `build-7`, which is the name that comes back on
+ * a notification raised from that side.
+ */
+export function openTaskLog(id: string): void {
+  const known = useTaskStore.getState().tasks.find((t) => t.id === id || t.streamId === id);
+
+  useUIStore.getState().openTask(known?.id ?? id);
+}
+
 export function watchAnnouncements(): () => void {
   return onAnnouncement(({ title, body, failed, container, task }) => {
     const open = container
       ? () => useUIStore.getState().openContainer(container)
       : task
-        ? () => useTaskStore.getState().inspect(task)
+        ? () => openTaskLog(task)
         : undefined;
 
     useToastStore

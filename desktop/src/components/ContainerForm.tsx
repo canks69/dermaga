@@ -4,7 +4,8 @@ import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
 import { useToastStore } from '../store/toastStore';
 import type { PendingEdit, ContainerSpec } from '../types';
-import { Checkbox, Field, Fieldset, Modal, Row } from './form';
+import { Checkbox, Field, Fieldset, FormPage, Row } from './form';
+import { Button } from './Button';
 import { useValidation } from '../hooks/useValidation';
 import {
   absolutePath,
@@ -30,6 +31,8 @@ import { useTaskStore } from '../store/taskStore';
 interface ContainerFormProps {
   /** Present when editing; absent when creating. */
   editing?: string;
+  /** Where the back link goes, named — "Containers", or a container's name. */
+  backTo?: string;
   /** What to open with: a whole spec when editing, or just an image to run. */
   initial?: Partial<ContainerSpec>;
   /**
@@ -40,6 +43,14 @@ interface ContainerFormProps {
   resumed?: PendingEdit;
   /** Throws the unfinished edit away and closes; the container is untouched. */
   onDiscardResumed?: () => void;
+  /**
+   * Called once the run is under way, with the name it was filed under.
+   *
+   * Where the form goes next is the page's to decide, not this component's --
+   * creating lands on what the run is printing, and the only thing needed to
+   * find that is the id, which is the one thing only this side knows.
+   */
+  onStarted?: (taskId: string) => void;
   /**
    * Whether the container starts with Dermaga, which is not part of the spec:
    * it is a record Dermaga keeps rather than anything the runtime knows.
@@ -69,11 +80,25 @@ const EMPTY: Partial<ContainerSpec> = {
  */
 const AUTO_BOOT_LABEL = 'dermaga.autoboot';
 
+/**
+ * The least time the Create button spins for.
+ *
+ * The agent answers as soon as it has the command, which on an image already
+ * on the Mac is quick enough that the spinner would appear and be gone inside
+ * the same frame -- and a control that flickers reads as a glitch rather than
+ * as work done. Long enough to be seen, short enough that nobody waits on it.
+ */
+const HELD_FOR = 550;
+
+const held = () => new Promise((resolve) => setTimeout(resolve, HELD_FOR));
+
 export function ContainerForm({
   editing,
+  backTo,
   initial,
   resumed,
   onDiscardResumed,
+  onStarted,
   startsWithDermaga,
   onClose,
 }: ContainerFormProps) {
@@ -148,6 +173,11 @@ export function ContainerForm({
       readOnly: m.readOnly ?? false,
     }))
   );
+
+  // Whether the run has been asked for and not yet acknowledged. The button
+  // spins on it, which is the whole of what this state is for: the work itself
+  // belongs to the task strip and outlives this form.
+  const [creating, setCreating] = useState(false);
 
   const startTask = useTaskStore((s) => s.start);
   const failTask = useTaskStore((s) => s.fail);
@@ -226,14 +256,9 @@ export function ContainerForm({
         : null,
   });
 
-  // The dialog closes immediately and the work reports itself in the list, so
-  // a slow image pull does not hold a modal open.
-  const submit = () => {
-    const spec = buildSpec();
+  const submit = async (spec: ContainerSpec = buildSpec()) => {
     const label = spec.name || spec.image;
     const id = `container:${label}`;
-
-    onClose();
 
     // Kept against the name rather than sent with the spec, because the
     // runtime has nowhere to put it. Written before the container exists on
@@ -246,20 +271,38 @@ export function ContainerForm({
     }
 
     if (!editing) {
-      // `container run` reports its own steps -- fetching, unpacking, starting
-      // -- so the row shows real progress rather than an endless spinner.
-      void runTask({
-        id,
-        kind: 'container',
-        label,
-        method: 'containers.create',
-        params: spec,
-        // Nothing to say here: finishing is announced once, from the side that
-        // knows whether this window is in front of the user or behind them.
-      });
+      setCreating(true);
+
+      // Held until the agent has the command, and no longer. `container run`
+      // reports its own steps after that -- fetching, unpacking, starting --
+      // and it reports them to the task strip, which outlives this form.
+      await Promise.all([
+        runTask({
+          id,
+          kind: 'container',
+          label,
+          method: 'containers.create',
+          params: spec,
+          // Nothing to say here: finishing is announced once, from the side
+          // that knows whether this window is in front of the user or behind
+          // them.
+        }),
+        held(),
+      ]);
+
+      setCreating(false);
+      // Onto what it is printing, where a pull that is going to take a while
+      // says so line by line -- rather than back to a list where the only sign
+      // of it is a bar in the title bar. Nothing is lost by leaving that page:
+      // the run belongs to the task strip either way.
+      if (onStarted) onStarted(id);
+      else onClose();
       return;
     }
 
+    // Recreating closes at once and reports itself in the strip: it is started
+    // from a container that is already on screen somewhere behind this.
+    onClose();
     startTask({ id, kind: 'container', label, step: 'Recreating…' });
 
     void (async () => {
@@ -275,9 +318,21 @@ export function ContainerForm({
     })();
   };
 
+  /**
+   * What the button does.
+   *
+   * Straight to it: nothing is asked first, and the only guard is against a
+   * second press while the first is still being handed over.
+   */
+  const primary = () => {
+    if (creating) return;
+
+    void submit();
+  };
+
   return (
-    <Modal
-      wide
+    <FormPage
+      backTo={backTo}
       title={editing ? `Edit ${editing}` : 'New container'}
       subtitle={
         editing
@@ -285,34 +340,50 @@ export function ContainerForm({
           : 'Runs `container run --detach` with these settings.'
       }
       onClose={onClose}
-      onSubmit={() => form.attempt(submit)}
+      onSubmit={() => form.attempt(primary)}
       footer={
         <>
-          <button onClick={onClose} className="btn-ghost">
+          <button onClick={onClose} className="btn-ghost" disabled={creating}>
             Cancel
           </button>
-          <button onClick={submit} className="btn-primary" disabled={!form.valid}>
+          {/* It spins rather than only greying out: a button that has gone
+              quiet leaves somebody wondering whether the press landed, and
+              this one is pressed once and answered a second later. */}
+          <Button
+            variant="primary"
+            busy={creating}
+            busyLabel="Creating…"
+            disabled={!form.valid}
+            onClick={() => form.attempt(primary)}
+          >
             {editing ? 'Recreate' : 'Create'}
-          </button>
+          </Button>
         </>
       }
     >
+      {/* Rounded and padded like the cards below it rather than like a
+          notice pasted on top of them: it is the first thing on the page, and
+          a box in a different shape reads as something the form has gone wrong
+          about rather than as where the form has come from. */}
       {resumed && (
-        <div className="mb-4 rounded-md border border-orange-600/40 bg-orange-600/5 p-3 text-xs">
-          <p className="font-semibold text-orange-700 dark:text-orange-500">
+        <div className="flex flex-col items-start gap-1.5 rounded-xl border border-orange-600/40 bg-orange-600/5 p-3.5">
+          <p className="text-small font-semibold text-orange-700 dark:text-orange-500">
             Picked up where you left off
           </p>
-          <p className="mt-1 selectable text-ink-700 dark:text-ink-300">
+          <p className="selectable text-small text-ink-700 dark:text-ink-300">
             These are the changes from an edit that did not finish
             {resumed.reason ? `: ${resumed.reason}` : '.'}
           </p>
-          <button onClick={onDiscardResumed} className="btn-ghost mt-2">
+          <button onClick={onDiscardResumed} className="btn-ghost">
             Discard them and start from the container
           </button>
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
+      {/* What the container is. Four fields nobody gets to skip -- the two
+          that name it and the two that bound it -- kept together at the top so
+          the common case is a card and a button. */}
+      <Fieldset legend="Container" columns={2}>
         <Field label="Name" hint="Left blank, the CLI generates one." {...form.field('name')}>
           <input
             value={name}
@@ -361,16 +432,12 @@ export function ContainerForm({
             className="input"
           />
         </Field>
+      </Fieldset>
 
-        <Field label="Working directory" {...form.field('workdir')}>
-          <input
-            value={workdir}
-            onChange={(e) => setWorkdir(e.target.value)}
-            placeholder="/app"
-            className="input"
-          />
-        </Field>
-
+      {/* What runs inside it, and as whom. All four override something the
+          image already sets, which is what makes them a group and what makes
+          them safe to leave alone. */}
+      <Fieldset legend="Process" hint="Left empty, the image decides." columns={2}>
         <Field label="Entrypoint" hint="Overrides the image entrypoint.">
           <input
             value={entrypoint}
@@ -389,6 +456,15 @@ export function ContainerForm({
           />
         </Field>
 
+        <Field label="Working directory" {...form.field('workdir')}>
+          <input
+            value={workdir}
+            onChange={(e) => setWorkdir(e.target.value)}
+            placeholder="/app"
+            className="input"
+          />
+        </Field>
+
         <Field label="User" hint="name, uid, or uid:gid." {...form.field('user')}>
           <input
             value={user}
@@ -397,29 +473,29 @@ export function ContainerForm({
             className="input"
           />
         </Field>
+      </Fieldset>
 
-        <div className="flex flex-col justify-end gap-2 pb-1">
-          <div className="flex flex-col gap-1" data-field="autoBoot">
-            <Checkbox
-              checked={autoBoot}
-              onChange={setAutoBoot}
-              label="Start this container when Dermaga starts"
-            />
-            {form.problem('autoBoot') && (
-              <p className="text-tiny font-medium text-orange-700 dark:text-orange-500">
-                {form.problem('autoBoot')}
-              </p>
-            )}
-          </div>
-          <Checkbox checked={init} onChange={setInit} label="Run an init process" />
-          <Checkbox checked={readOnly} onChange={setReadOnly} label="Read-only root filesystem" />
+      {/* The switches, in a group of their own. They used to be stacked in the
+          last cell of the field grid, where they were a column of sentences
+          wedged beside a column of boxes -- four decisions with no heading,
+          taking their alignment from whichever field happened to sit above. */}
+      <Fieldset legend="Behaviour" columns={2}>
+        <div className="flex flex-col gap-1" data-field="autoBoot">
           <Checkbox
-            checked={removeOnExit}
-            onChange={setRemoveOnExit}
-            label="Remove when it stops"
+            checked={autoBoot}
+            onChange={setAutoBoot}
+            label="Start this container when Dermaga starts"
           />
+          {form.problem('autoBoot') && (
+            <p className="text-tiny font-medium text-orange-700 dark:text-orange-500">
+              {form.problem('autoBoot')}
+            </p>
+          )}
         </div>
-      </div>
+        <Checkbox checked={init} onChange={setInit} label="Run an init process" />
+        <Checkbox checked={readOnly} onChange={setReadOnly} label="Read-only root filesystem" />
+        <Checkbox checked={removeOnExit} onChange={setRemoveOnExit} label="Remove when it stops" />
+      </Fieldset>
 
       <Fieldset
         legend="Networks"
@@ -470,7 +546,7 @@ export function ContainerForm({
                 setPorts(ports.map((p, i) => (i === index ? { ...p, host: e.target.value } : p)))
               }
               placeholder="host"
-              className="input w-full"
+              className="input min-w-24 flex-1"
             />
             <span className="text-xs text-ink-500">→</span>
             <input
@@ -481,7 +557,7 @@ export function ContainerForm({
                 )
               }
               placeholder="container"
-              className="input w-full"
+              className="input min-w-24 flex-1"
             />
             <select
               value={port.protocol}
@@ -528,7 +604,7 @@ export function ContainerForm({
               }
               list={mount.type === 'volume' ? 'dermaga-volumes' : undefined}
               placeholder={mount.type === 'volume' ? 'volume name' : '/host/path'}
-              className="input w-full"
+              className="input min-w-36 flex-1"
             />
             <span className="text-xs text-ink-500">→</span>
             <input
@@ -539,7 +615,7 @@ export function ContainerForm({
                 )
               }
               placeholder="/container/path"
-              className="input w-full"
+              className="input min-w-36 flex-1"
             />
             <Checkbox
               checked={mount.readOnly}
@@ -591,7 +667,7 @@ export function ContainerForm({
                   )
                 }
                 placeholder="KEY"
-                className="input w-1/3 font-mono text-xs"
+                className="input min-w-28 flex-1 font-mono text-xs"
               />
               <input
                 value={entry.value}
@@ -601,12 +677,12 @@ export function ContainerForm({
                   )
                 }
                 placeholder="value"
-                className="input flex-1 font-mono text-xs"
+                className="input min-w-40 flex-[2] font-mono text-xs"
               />
             </Row>
           ))
         )}
       </Fieldset>
-    </Modal>
+    </FormPage>
   );
 }

@@ -27,6 +27,20 @@ export function formatMemory(value?: string): string {
   return `${gib % 1 === 0 ? gib : gib.toFixed(1)} GB`;
 }
 
+/**
+ * "a", "a and b", "a, b and 2 more" -- a list that cannot run away.
+ *
+ * For a sentence that reads back what somebody is about to do: two of them
+ * name the thing, and past that the count is the useful part. A paragraph that
+ * lists nine ports is a paragraph nobody finishes, and what is being looked
+ * for is hiding in it.
+ */
+export function list(items: string[]): string {
+  if (items.length <= 2) return items.join(' and ');
+
+  return `${items.slice(0, 2).join(', ')} and ${items.length - 2} more`;
+}
+
 /** Compact "3d", "4h", "12m" style age, counted from an ISO timestamp. */
 export function formatDuration(iso?: string, now: number = Date.now()): string {
   if (!iso) return '—';
