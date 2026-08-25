@@ -7,7 +7,7 @@ import { DockerfileEditor } from '../components/DockerfileEditor';
 import { api } from '../services/api';
 import { pickDirectory } from '../services/ipc';
 import { runTask } from '../services/tasks';
-import { useUIStore } from '../store/uiStore';
+import { askBeforeLeaving, useUIStore } from '../store/uiStore';
 import { useValidation } from '../hooks/useValidation';
 import { absolutePath, envText, imageReference, required } from '../utils/validate';
 import { list } from '../utils/format';
@@ -204,6 +204,10 @@ function BuildForm({
     } else {
       start();
     }
+
+    // Started, so there is nothing in this form left to lose -- and the page
+    // it is about to be replaced by must not be asked about.
+    askBeforeLeaving(null);
 
     // Not back to where the form was opened from: a build is minutes of output,
     // and the first place anybody looks when one goes wrong is that output --

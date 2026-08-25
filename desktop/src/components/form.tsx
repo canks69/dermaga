@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { PageHeader } from './PageHeader';
 import { tabWrap } from '../utils/focus';
+import { askBeforeLeaving } from '../store/uiStore';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -198,6 +199,15 @@ export function Modal({
  * behind it to keep the caret out of, and a key that throws away a form this
  * long because it was reached for the field beside it is a key that costs
  * somebody ten minutes.
+ *
+ * Leaving is asked about, though, once anything has been typed. That was the
+ * hole the reasoning above left open: a form on a page has the sidebar beside
+ * it the entire time it is being filled in, so the click that costs ten
+ * minutes was never going to be Escape -- it was going to be Containers.
+ * Anything typed inside the body counts, which is why it is noticed here
+ * rather than asked of each form: five forms would each have to work out what
+ * "changed" means for thirty fields, and the one that got it wrong would be
+ * the one that lost the work.
  */
 export function FormPage({
   title,
@@ -220,6 +230,20 @@ export function FormPage({
   footer: ReactNode;
   hint?: ReactNode;
 }) {
+  // Whether anything has been typed into this form. A ref rather than state:
+  // nothing on the page is drawn differently for it, and re-rendering a
+  // thirty-field form on the first keystroke would be a cost paid for nothing.
+  const typedInto = useRef(false);
+
+  useEffect(() => {
+    askBeforeLeaving(() => typedInto.current);
+
+    // Whatever happens to this page -- submitted, left, or replaced by another
+    // form -- the question goes with it. A page that has gone must not be able
+    // to hold the window.
+    return () => askBeforeLeaving(null);
+  }, []);
+
   useEffect(() => {
     if (!onSubmit) return;
 
@@ -250,7 +274,19 @@ export function FormPage({
           environment variable are each a line of several fields, and the line
           is as long as the page. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="flex w-full flex-col gap-4.5 px-5 py-5 @2xl:px-7">{children}</div>
+        {/* One listener for the whole form. `input` covers typing, pasting and
+            dragging text in; `change` covers the controls that have no text to
+            type -- a checkbox, a select, a file. Both are listened for on the
+            way up rather than on each field, because the fields are built by
+            five different pages and a field added later would otherwise be a
+            field that quietly does not count. */}
+        <div
+          onInput={() => (typedInto.current = true)}
+          onChange={() => (typedInto.current = true)}
+          className="flex w-full flex-col gap-4.5 px-5 py-5 @2xl:px-7"
+        >
+          {children}
+        </div>
       </div>
 
       {/* The foot spans the page rather than the column: it is the edge of the

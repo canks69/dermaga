@@ -35,6 +35,15 @@ export type IntentTarget = string;
 interface UIState {
   route: Route;
   /**
+   * A move that was stopped on the way out, waiting on an answer. Null when
+   * nothing is being asked.
+   */
+  held: Partial<UIState> | null;
+  /** Leave anyway, and lose whatever was in the way. */
+  goAnyway: () => void;
+  /** Stay, and put the question away. */
+  stay: () => void;
+  /**
    * What is typed into the title bar. There is one search in this app and this
    * is it: every page used to carry a box of its own as well, so a name typed
    * in one of them found nothing while the other had the answer.
@@ -91,6 +100,32 @@ interface UIState {
 const clearedOnMove = { intent: null, intentTarget: null, globalQuery: '' } as const;
 
 /**
+ * Whatever is standing on the current page and would lose something if it were
+ * left. In practice a form somebody has typed into.
+ *
+ * Held here rather than in the store because it is not state: nothing renders
+ * differently for it, and a page registering itself as state would be a render
+ * writing to a store during one.
+ */
+let asking: (() => boolean) | null = null;
+
+/**
+ * Says that leaving this page costs something, so ask first.
+ *
+ * Called by a page with unsaved work in it, and called again with null when
+ * that page goes -- which every form does through an effect's cleanup, so a
+ * page that has already gone can never hold the window hostage.
+ *
+ * The reason this exists at all: a form is a page now, which means the sidebar
+ * is beside it the whole time it is being filled in. Escape was deliberately
+ * left out of these forms so that a stray key could not throw away ten minutes
+ * of typing -- and a stray click on the sidebar did exactly that instead.
+ */
+export function askBeforeLeaving(ask: (() => boolean) | null): void {
+  asking = ask;
+}
+
+/**
  * Where a page opened from another page should go back to.
  *
  * Normally the page it was opened from. Not for a form, though: a build that
@@ -112,92 +147,104 @@ function behind(route: Route): Route | undefined {
   }
 }
 
+/**
+ * Every way of leaving a page passes through here.
+ *
+ * Where something has asked to be asked first, the move is not made: it is put
+ * down as `held`, the window puts the question, and the answer either lets it
+ * through or throws it away. One place rather than thirteen, because the ways
+ * of moving are only going to go on multiplying and a guard that covers twelve
+ * of them is a guard somebody will find the thirteenth of by losing a form.
+ */
+function move(next: (state: UIState) => Partial<UIState>) {
+  return (state: UIState): Partial<UIState> => {
+    const wanted = next(state);
+
+    if (wanted.route && wanted.route !== state.route && asking?.()) {
+      return { held: wanted };
+    }
+
+    return wanted;
+  };
+}
+
 export const useUIStore = create<UIState>((set) => ({
   route: { name: 'containers' },
+  held: null,
+  // Straight through, without asking again: the question has been answered.
+  goAnyway: () => set((state) => ({ ...state.held, held: null })),
+  stay: () => set({ held: null }),
   globalQuery: '',
   intent: null,
   intentTarget: null,
   // Moving clears the search: the page you asked for is the page you land on.
   // Every other way of moving drops a pending intent too -- arriving somewhere
   // by another route means the user changed their mind.
-  navigate: (route) => set({ route, intent: null, intentTarget: null, globalQuery: '' }),
+  navigate: (route) => set(move(() => ({ route, ...clearedOnMove }))),
   // Navigates and asks the page it lands on to open something, which is how a
   // search result can be "Pull an image" rather than "go to Images and find
   // the button".
   navigateWith: (route, intent, target) =>
-    set({ route, intent, intentTarget: target ?? null, globalQuery: '' }),
+    set(move(() => ({ route, intent, intentTarget: target ?? null, globalQuery: '' }))),
   clearIntent: () => set({ intent: null, intentTarget: null }),
   newContainer: (initial) =>
-    set((state) => ({
+    set(move((state) => ({
       // The page it was opened from, not the one before that: a create opened
       // from another create cannot happen, and anything else is one step back.
       route: { name: 'container-new', initial, from: state.route },
-      intent: null,
-      intentTarget: null,
-      globalQuery: '',
-    })),
+      ...clearedOnMove,
+    }))),
   editContainer: (id, initial, resumed) =>
-    set((state) => ({
-      route: { name: 'container-edit', id, initial, resumed, from: state.route },
-      intent: null,
-      intentTarget: null,
-      globalQuery: '',
-    })),
+    set(
+      move((state) => ({
+        route: { name: 'container-edit', id, initial, resumed, from: state.route },
+        ...clearedOnMove,
+      }))
+    ),
   browseTemplates: () =>
-    set((state) => ({
-      route: { name: 'templates', from: state.route },
-      intent: null,
-      intentTarget: null,
-      globalQuery: '',
-    })),
+    set(move((state) => ({ route: { name: 'templates', from: state.route }, ...clearedOnMove }))),
   buildImage: (opening) =>
-    set((state) => ({
-      route: {
+    set(
+      move((state) => ({
+        route: {
         name: 'image-build',
         start: opening?.start,
         drop: opening?.drop,
         // A second Dockerfile dropped while this page is open must not make
         // the page its own way back: keep the one it already had.
-        from: state.route.name === 'image-build' ? state.route.from : state.route,
-      },
-      intent: null,
-      intentTarget: null,
-      globalQuery: '',
-    })),
+          from: state.route.name === 'image-build' ? state.route.from : state.route,
+        },
+        ...clearedOnMove,
+      }))
+    ),
   openTask: (id) =>
-    set((state) => ({ route: { name: 'task', id, from: behind(state.route) }, ...clearedOnMove })),
+    set(
+      move((state) => ({ route: { name: 'task', id, from: behind(state.route) }, ...clearedOnMove }))
+    ),
   addRoute: (editing) =>
-    set((state) => ({
-      route: { name: 'tunnel-route', editing, from: behind(state.route) },
-      ...clearedOnMove,
-    })),
+    set(
+      move((state) => ({
+        route: { name: 'tunnel-route', editing, from: behind(state.route) },
+        ...clearedOnMove,
+      }))
+    ),
   newMachine: () =>
-    set((state) => ({
-      route: { name: 'machine-new', from: behind(state.route) },
-      ...clearedOnMove,
-    })),
+    set(
+      move((state) => ({ route: { name: 'machine-new', from: behind(state.route) }, ...clearedOnMove }))
+    ),
   // Logs, not Inspect. A container is opened to see what it is saying far more
   // often than to read back the flags it was started with, and the flags are
   // one tab away either way.
   openContainer: (id, tab = 'logs', path) =>
-    set({
-      route: { name: 'container', id, tab, path },
-      globalQuery: '',
-    }),
+    set(move(() => ({ route: { name: 'container', id, tab, path }, globalQuery: '' }))),
   openMachine: (id, tab = 'overview') =>
-    set({ route: { name: 'machine', id, tab }, intent: null, intentTarget: null, globalQuery: '' }),
+    set(move(() => ({ route: { name: 'machine', id, tab }, ...clearedOnMove }))),
   openImage: (reference) =>
-    set({ route: { name: 'image', reference }, intent: null, intentTarget: null, globalQuery: '' }),
+    set(move(() => ({ route: { name: 'image', reference }, ...clearedOnMove }))),
   openNetwork: (name) =>
-    set({
-      route: { name: 'network', network: name },
-      globalQuery: '',
-    }),
+    set(move(() => ({ route: { name: 'network', network: name }, globalQuery: '' }))),
   openVolume: (name) =>
-    set({
-      route: { name: 'volume', volume: name },
-      globalQuery: '',
-    }),
+    set(move(() => ({ route: { name: 'volume', volume: name }, globalQuery: '' }))),
   setTab: (tab) =>
     set((state) => {
       if (state.route.name === 'container') {
@@ -209,44 +256,46 @@ export const useUIStore = create<UIState>((set) => ({
       return state;
     }),
   back: () =>
-    set((state) => {
-      const cleared = { intent: null, intentTarget: null, globalQuery: '' };
-      if (state.route.name === 'machine-new') {
-        return { route: state.route.from ?? { name: 'machines' }, ...cleared };
-      }
-      if (state.route.name === 'tunnel-route') {
-        return { route: state.route.from ?? { name: 'tunnels' }, ...cleared };
-      }
-      if (state.route.name === 'task') {
-        return { route: state.route.from ?? { name: 'images' }, ...cleared };
-      }
-      if (state.route.name === 'image-build') {
-        return { route: state.route.from ?? { name: 'images' }, ...cleared };
-      }
-      if (state.route.name === 'templates') {
-        return { route: state.route.from ?? { name: 'containers' }, ...cleared };
-      }
-      if (state.route.name === 'container-new') {
-        return { route: state.route.from ?? { name: 'containers' }, ...cleared };
-      }
-      // Back from an edit is the container it was an edit of, which is where
-      // it was opened from in every case but a route somebody hand-wrote.
-      if (state.route.name === 'container-edit') {
-        return {
-          route: state.route.from ?? {
-            name: 'container' as const,
-            id: state.route.id,
-            tab: 'overview' as const,
-          },
-          ...cleared,
-        };
-      }
-      if (state.route.name === 'container') return { route: { name: 'containers' }, ...cleared };
-      if (state.route.name === 'machine') return { route: { name: 'machines' }, ...cleared };
-      if (state.route.name === 'image') return { route: { name: 'images' }, ...cleared };
-      if (state.route.name === 'network') return { route: { name: 'networks' }, ...cleared };
-      if (state.route.name === 'volume') return { route: { name: 'volumes' }, ...cleared };
-      return state;
-    }),
+    set(
+      move((state) => {
+        const cleared = { intent: null, intentTarget: null, globalQuery: '' };
+        if (state.route.name === 'machine-new') {
+          return { route: state.route.from ?? { name: 'machines' }, ...cleared };
+        }
+        if (state.route.name === 'tunnel-route') {
+          return { route: state.route.from ?? { name: 'tunnels' }, ...cleared };
+        }
+        if (state.route.name === 'task') {
+          return { route: state.route.from ?? { name: 'images' }, ...cleared };
+        }
+        if (state.route.name === 'image-build') {
+          return { route: state.route.from ?? { name: 'images' }, ...cleared };
+        }
+        if (state.route.name === 'templates') {
+          return { route: state.route.from ?? { name: 'containers' }, ...cleared };
+        }
+        if (state.route.name === 'container-new') {
+          return { route: state.route.from ?? { name: 'containers' }, ...cleared };
+        }
+        // Back from an edit is the container it was an edit of, which is where
+        // it was opened from in every case but a route somebody hand-wrote.
+        if (state.route.name === 'container-edit') {
+          return {
+            route: state.route.from ?? {
+              name: 'container' as const,
+              id: state.route.id,
+              tab: 'overview' as const,
+            },
+            ...cleared,
+          };
+        }
+        if (state.route.name === 'container') return { route: { name: 'containers' }, ...cleared };
+        if (state.route.name === 'machine') return { route: { name: 'machines' }, ...cleared };
+        if (state.route.name === 'image') return { route: { name: 'images' }, ...cleared };
+        if (state.route.name === 'network') return { route: { name: 'networks' }, ...cleared };
+        if (state.route.name === 'volume') return { route: { name: 'volumes' }, ...cleared };
+        return state;
+      })
+    ),
   setGlobalQuery: (globalQuery) => set({ globalQuery }),
 }));

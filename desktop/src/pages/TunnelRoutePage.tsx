@@ -6,7 +6,7 @@ import { Field, Fieldset, FormPage } from '../components/form';
 import { Autocomplete } from '../components/Autocomplete';
 import { api } from '../services/api';
 import { useToastStore } from '../store/toastStore';
-import { useUIStore } from '../store/uiStore';
+import { askBeforeLeaving, useUIStore } from '../store/uiStore';
 import { useValidation } from '../hooks/useValidation';
 import { port as validPort, subdomain as validSubdomain } from '../utils/validate';
 import type { Route, TunnelKind, TunnelsStatus, TunnelTarget, Zone } from '../types';
@@ -141,6 +141,8 @@ export function TunnelRoutePage({ route }: { route: Extract<Route, { name: 'tunn
       });
 
       pushToast(`${where(added.kind, added.target, added.port)} is on ${added.hostname}`);
+      // Added, so there is nothing in this form left to lose.
+      askBeforeLeaving(null);
       // Back to the picture, which draws itself from what the agent pushes --
       // the new route is already in it by the time this lands.
       back();

@@ -5,6 +5,7 @@ import { LicencesPage } from './pages/LicencesPage';
 import { RegistriesPage } from './pages/RegistriesPage';
 import { TunnelRoutePage } from './pages/TunnelRoutePage';
 import { TunnelsPage } from './pages/TunnelsPage';
+import { ConfirmDialog } from './components/ConfirmDialog';
 import { SettingsPanel } from './components/SettingsPanel';
 import { Sidebar } from './components/Sidebar';
 import { TitleBar } from './components/TitleBar';
@@ -303,8 +304,36 @@ export function App() {
 
       <DropTarget />
 
+      <LeavingAForm />
+
       <Toasts />
     </div>
+  );
+}
+
+/**
+ * The question a form asks when something tries to leave it.
+ *
+ * Here rather than inside the form, because what is being answered is a move
+ * the form knows nothing about: a click on the sidebar, a result picked out of
+ * the palette, a toast opening the container it is about. The move is already
+ * held; this only puts the choice on screen.
+ */
+function LeavingAForm() {
+  const held = useUIStore((s) => s.held);
+  const goAnyway = useUIStore((s) => s.goAnyway);
+  const stay = useUIStore((s) => s.stay);
+
+  if (!held) return null;
+
+  return (
+    <ConfirmDialog
+      title="Leave without saving?"
+      body="What you have filled in here will be lost. Nothing has been created yet."
+      confirmLabel="Discard"
+      onConfirm={goAnyway}
+      onCancel={stay}
+    />
   );
 }
 

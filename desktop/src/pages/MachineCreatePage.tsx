@@ -3,7 +3,7 @@ import { Checkbox, Field, Fieldset, FormPage } from '../components/form';
 import { Autocomplete } from '../components/Autocomplete';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useResourceStore } from '../store/resourceStore';
-import { useUIStore } from '../store/uiStore';
+import { askBeforeLeaving, useUIStore } from '../store/uiStore';
 import { runTask } from '../services/tasks';
 import { useValidation } from '../hooks/useValidation';
 import {
@@ -86,6 +86,10 @@ export function MachineCreatePage() {
     const id = `machine:${label}`;
 
     void runTask({ id, kind: 'machine', label, method: 'machines.create', params: spec });
+
+    // Started, so there is nothing in this form left to lose -- and the page
+    // it is about to be replaced by must not be asked about.
+    askBeforeLeaving(null);
 
     // Onto what it is printing. A machine is an image pulled, unpacked and
     // booted -- the better part of a minute the first time -- and the task
