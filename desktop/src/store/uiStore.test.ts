@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useUIStore } from './uiStore';
+import { askBeforeLeaving, useUIStore } from './uiStore';
 import type { TunnelRoute } from '../types';
 
 /**
@@ -335,5 +335,91 @@ describe('the form that makes a machine', () => {
       id: 'machine:dev',
       from: { name: 'machines' },
     });
+  });
+});
+
+/**
+ * A form is a page now, which puts the sidebar beside it for the whole time it
+ * is being filled in. Nothing used to stand between a stray click there and
+ * thirty fields of typing.
+ */
+describe('leaving a form that has been typed into', () => {
+  beforeEach(() => {
+    askBeforeLeaving(null);
+    useUIStore.setState({ route: { name: 'container-new' }, held: null, globalQuery: '' });
+  });
+
+  it('holds the move rather than making it', () => {
+    askBeforeLeaving(() => true);
+    useUIStore.getState().navigate({ name: 'volumes' });
+
+    expect(useUIStore.getState().route.name, 'the form was left anyway').toBe('container-new');
+    expect(useUIStore.getState().held?.route).toEqual({ name: 'volumes' });
+  });
+
+  it('holds it whichever way out was taken', () => {
+    const ways: [string, () => void][] = [
+      ['navigate', () => useUIStore.getState().navigate({ name: 'volumes' })],
+      ['back', () => useUIStore.getState().back()],
+      ['openContainer', () => useUIStore.getState().openContainer('web')],
+      ['openImage', () => useUIStore.getState().openImage('alpine:latest')],
+      ['openTask', () => useUIStore.getState().openTask('build-7')],
+      ['browseTemplates', () => useUIStore.getState().browseTemplates()],
+      ['newMachine', () => useUIStore.getState().newMachine()],
+      ['addRoute', () => useUIStore.getState().addRoute()],
+    ];
+
+    for (const [name, way] of ways) {
+      useUIStore.setState({ route: { name: 'container-new' }, held: null });
+      askBeforeLeaving(() => true);
+      way();
+
+      expect(useUIStore.getState().route.name, `${name} walked straight past the question`).toBe(
+        'container-new'
+      );
+      expect(useUIStore.getState().held, `${name} asked nothing`).not.toBeNull();
+    }
+  });
+
+  it('makes the move once it has been answered', () => {
+    askBeforeLeaving(() => true);
+    useUIStore.getState().navigate({ name: 'volumes' });
+    useUIStore.getState().goAnyway();
+
+    expect(useUIStore.getState().route).toEqual({ name: 'volumes' });
+    expect(useUIStore.getState().held).toBeNull();
+  });
+
+  it('stays put, and forgets where it was going', () => {
+    askBeforeLeaving(() => true);
+    useUIStore.getState().navigate({ name: 'volumes' });
+    useUIStore.getState().stay();
+
+    expect(useUIStore.getState().route.name).toBe('container-new');
+    expect(useUIStore.getState().held).toBeNull();
+  });
+
+  // A form with nothing in it is not worth a question, and neither is a page
+  // that has already gone -- which is what the cleanup hands back.
+  it('asks nothing when there is nothing to lose', () => {
+    askBeforeLeaving(() => false);
+    useUIStore.getState().navigate({ name: 'volumes' });
+    expect(useUIStore.getState().route).toEqual({ name: 'volumes' });
+
+    useUIStore.setState({ route: { name: 'container-new' }, held: null });
+    askBeforeLeaving(null);
+    useUIStore.getState().navigate({ name: 'images' });
+    expect(useUIStore.getState().route).toEqual({ name: 'images' });
+  });
+
+  // Started work is not unsaved work. The form that has just built something
+  // navigates to what it is printing, and must not be asked about on the way.
+  it('lets a form that has submitted go', () => {
+    askBeforeLeaving(() => true);
+    askBeforeLeaving(null);
+    useUIStore.getState().openTask('build-7');
+
+    expect(useUIStore.getState().route.name).toBe('task');
+    expect(useUIStore.getState().held).toBeNull();
   });
 });

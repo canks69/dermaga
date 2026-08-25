@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Check, Network as NetworkIcon } from 'lucide-react';
 import { api } from '../services/api';
 import { useResourceStore } from '../store/resourceStore';
+import { askBeforeLeaving } from '../store/uiStore';
 import { useToastStore } from '../store/toastStore';
 import type { PendingEdit, ContainerSpec } from '../types';
 import { Checkbox, Field, Fieldset, FormPage, Row } from './form';
@@ -305,6 +306,9 @@ export function ContainerForm({
       // says so line by line -- rather than back to a list where the only sign
       // of it is a bar in the title bar. Nothing is lost by leaving that page:
       // the run belongs to the task strip either way.
+      // Started, so there is nothing in this form left to lose, and the page
+      // it is about to be replaced by must not be asked about.
+      askBeforeLeaving(null);
       if (onStarted) onStarted(id);
       else onClose();
       return;
