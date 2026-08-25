@@ -1,5 +1,32 @@
 [
   {
+    "version": "v1.12.0",
+    "date": "2026-08-25",
+    "summary": "This release carries work from @canks69 and @ryanbekhen.",
+    "sections": [
+      {
+        "title": "Changed",
+        "entries": [
+          "**The long forms are pages now, not panels laid over what they are about.** Making a container asks for thirty things — a name, an image, limits, networks, ports, mounts, a whole environment — and it asked for them in a box that had to scroll inside itself while covering the list the container was about to appear in. Creating and editing a container, the template catalogue, building an image, publishing a hostname and making a machine are each a page of their own now, with the window's height to use and the same back link every other page is left by. Where that link goes is wherever you opened the form from: run an image from its own page, and leaving puts you back on that page rather than on a list of containers.",
+          "**Work that runs for minutes ends on what it is printing.** Pressing Create, Build or Create machine used to put you back on a list with a bar in the corner of the title bar, and the only way to read what a command was actually saying was a dialog half the window high, opened once it had already finished. There is a page for it now — the whole window, following the tail while the run is live and leaving off the moment you scroll up to read something. Every row in the task strip opens it, running or finished: a build in progress, which is the one people actually watch, had no way in at all.",
+          "**Create, Build and Recreate say what they are about to do, and wait.** None of them is destructive except Recreate, so this is not the confirmation a delete gets — it is the last cheap moment to read the settings back as a sentence rather than as thirty controls, which is where a port typed into the wrong box, or a gigabyte that was meant to be a megabyte, is actually noticed. Only what you set is read back. Build arguments are named but never quoted: what people put in them is versions and tokens, and a dialog is not the place to put a token on screen.",
+          "**Leaving a form you have typed into asks first.** Escape was deliberately left out of these forms so that a key reached for by mistake could not throw away ten minutes of typing. That was right and it stopped one step short: a form is a page now, which puts the sidebar beside it the whole time it is being filled in, and one stray click there did exactly what Escape was stopped from doing. Every way of leaving asks now — the sidebar, the search results, a notification opening something else — and a form you have just submitted is never asked about, because there is nothing left in it to lose.",
+          "**The sidebar and the title bar follow the theme.** They were near-black whatever the theme was, on the grounds that a frame should not change colour with the picture — which in a light window meant a black border down two sides of it. The frame is a shade under the page in the light now, and the near-black it always was in the dark. Log output keeps its dark box in both, because the colours a program prints are pulled towards that ground and half of them wash out on white.",
+          "**A release says who worked on it.** What changed was written down; who by was not, and the names were only ever in the git history, which is not where anybody reads a release from. Every version from this one on carries a line naming everybody who worked on it, here and on the release page, and each name opens that person's GitHub account."
+        ]
+      },
+      {
+        "title": "Fixed",
+        "entries": [
+          "**The window could lose its agent the moment it opened, and blame the agent for it.** Everything on the first screen would fail with \"the Dermaga agent stopped\" while the agent was still running and still answering. What it asked for on opening was every stored scan result, findings and all — two busy images here came to 17 MB in one answer, and the window will not read a message that big. It asks for the counts now, which is all any list shows; the findings are read on an image's own page, which asks for that one result by name.",
+          "**A build that finished while the window was closed had nothing to open.** Which is the one case the notification exists for: the build runs for minutes, the window is closed for all of them, and clicking \"finished\" opened a page that said nothing was running under that name. What a command printed lived in the window's memory and was written down by the window, when it finished, if it was still open. The agent keeps it now, whether or not anybody is watching.",
+          "**The suggestions under the image and volume fields never appeared.** They were the browser's own list, and the engine this window is drawn in barely implements it: nothing dropped down, nothing said the field had anything to offer, and the size or address written beside each name was thrown away unread. The list is drawn by the app now — it narrows as you type, moves with the arrow keys, and shows what each one costs to keep or where it answers. What you type is still the value; nothing is chosen for you.",
+          "**A dropped folder with a capital letter in its name suggested a tag no registry would accept.** Dropping a Dockerfile fills the tag in from the folder it came from, and folders are named by people — `Portfolio`, `Client Work`. Registries refuse an uppercase name outright, so the form opened already objecting to a field nobody had touched. The suggestion is lowercased and tidied now; what you type yourself is still left alone."
+        ]
+      }
+    ]
+  },
+  {
     "version": "v1.11.1",
     "date": "2026-08-24",
     "summary": "",

@@ -9,6 +9,8 @@ change means to someone using Dermaga, not for how much code moved.
 
 ## [v1.12.0] — 2026-08-25
 
+This release carries work from @canks69 and @ryanbekhen.
+
 ### Changed
 
 - **The long forms are pages now, not panels laid over what they are about.** Making a container asks
