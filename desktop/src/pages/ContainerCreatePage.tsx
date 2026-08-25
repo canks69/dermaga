@@ -49,6 +49,8 @@ function cameFrom(from: Route | undefined): string {
       return 'Images';
     case 'image':
       return shortImage(from.reference);
+    case 'templates':
+      return 'Templates';
     default:
       return 'Containers';
   }
