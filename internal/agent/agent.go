@@ -796,7 +796,7 @@ func (a *Agent) registerScanner() {
 	})
 
 	a.server.Register("scanner.reports", func(_ context.Context, _ json.RawMessage) (any, error) {
-		return a.scanner.Reports(), nil
+		return a.scanner.Briefs(), nil
 	})
 
 	a.server.Register("scanner.dismiss", func(_ context.Context, _ json.RawMessage) (any, error) {

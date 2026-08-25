@@ -242,6 +242,48 @@ type Report struct {
 	Layers []Layer `json:"layers,omitempty"`
 }
 
+// Brief is a report with the detail left behind: the counts a list is drawn
+// from, and nothing that hangs off them.
+//
+// The window asks for every stored result the moment it opens, and a report is
+// mostly its findings -- one busy image carries three thousand of them, and two
+// of those on the same Mac came to 16.7 MB in a single answer. The window reads
+// one message at a time and will not read one that big, so the connection went
+// down on the way in and the window reported an agent that was in fact still
+// running.
+//
+// Nothing on that first screen shows a finding. An image's row shows how many
+// it has of each severity, which is what this carries; the findings themselves
+// are read on the image's own page, and that page asks for its one report by
+// name.
+type Brief struct {
+	Reference         string         `json:"reference"`
+	Format            int            `json:"format,omitempty"`
+	DatabaseUpdatedAt string         `json:"databaseUpdatedAt,omitempty"`
+	ScannerVersion    string         `json:"scannerVersion,omitempty"`
+	Digest            string         `json:"digest,omitempty"`
+	ScannedAt         string         `json:"scannedAt"`
+	OS                string         `json:"os,omitempty"`
+	Targets           int            `json:"targets"`
+	Summary           map[string]int `json:"summary"`
+}
+
+// brief is what this report looks like with its findings, packages and layers
+// left out.
+func (r Report) brief() Brief {
+	return Brief{
+		Reference:         r.Reference,
+		Format:            r.Format,
+		DatabaseUpdatedAt: r.DatabaseUpdatedAt,
+		ScannerVersion:    r.ScannerVersion,
+		Digest:            r.Digest,
+		ScannedAt:         r.ScannedAt,
+		OS:                r.OS,
+		Targets:           r.Targets,
+		Summary:           r.Summary,
+	}
+}
+
 type Manager struct {
 	runner *cli.Runner
 	logger *slog.Logger

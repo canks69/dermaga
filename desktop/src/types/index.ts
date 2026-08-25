@@ -659,11 +659,23 @@ export interface ImagePackage {
   licenses?: string[];
 }
 
-export interface VulnerabilityReport {
+/**
+ * How a scan came out, without the findings behind it.
+ *
+ * This is what the window asks for on opening, for every image that has been
+ * scanned. A report is mostly its findings — a busy image carries three
+ * thousand — and no list shows one: an image's row shows how many it has of
+ * each severity, which is all of this. The findings are read on the image's
+ * own page, which asks for that one report by name.
+ */
+export interface ScanSummary {
   reference: string;
   scannedAt: string;
   os?: string;
   summary: Record<string, number>;
+}
+
+export interface VulnerabilityReport extends ScanSummary {
   findings: Finding[];
   /**
    * Everything installed. Absent from reports stored before Dermaga began

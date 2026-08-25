@@ -212,7 +212,7 @@ export function PackagesPane({
   onOnly: (value: Severity | null) => void;
 }) {
   const status = useScannerStore((s) => s.status);
-  const { report, scanning, preparing } = useImageScan(reference);
+  const { summary, report, scanning, preparing } = useImageScan(reference);
 
   // Whether the list is down to the packages something is known against.
   const [risky, setRisky] = useState(false);
@@ -274,6 +274,13 @@ export function PackagesPane({
   const affected = rows.filter((row) => row.findings.length > 0).length;
   const installed = rows.reduce((sum, row) => sum + (row.pkg.size ?? 0), 0);
 
+  // Scanned, but the result itself has not arrived yet. The window knows on
+  // opening which images have been scanned and how they came out; the findings
+  // are asked for when a page that shows them is opened, and that is a round
+  // trip. Saying "not scanned yet" during it would be untrue about an image
+  // scanned an hour ago.
+  const fetching = Boolean(summary) && !report;
+
   // Nothing to list and nothing to filter, so a header and its rule would be
   // furniture around an empty room: one centred statement instead.
   if (preparing || !report || rows.length === 0) {
@@ -288,11 +295,13 @@ export function PackagesPane({
         ) : (
           <Empty
             icon={ShieldAlert}
-            title={scanning ? 'Scanning…' : 'Not scanned yet'}
+            title={scanning ? 'Scanning…' : fetching ? 'Reading the result…' : 'Not scanned yet'}
             body={
               scanning
                 ? 'The result will appear here on its own.'
-                : 'Dermaga scans images in the background as it finds them. This one has not had its turn yet.'
+                : fetching
+                  ? `Scanned ${formatDuration(summary?.scannedAt)} ago. Fetching what it found.`
+                  : 'Dermaga scans images in the background as it finds them. This one has not had its turn yet.'
             }
           />
         )}

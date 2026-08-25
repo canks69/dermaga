@@ -2,10 +2,16 @@ import { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { useScannerStore } from '../store/scannerStore';
 import { useToastStore } from '../store/toastStore';
-import type { VulnerabilityReport } from '../types';
+import type { ScanSummary, VulnerabilityReport } from '../types';
 
 export interface ImageScan {
-  /** The stored result, or undefined until one has been made. */
+  /**
+   * Whether this image has been scanned, and how it came out. Known from the
+   * moment the window opens, unlike the report, which is fetched when a page
+   * that shows one is opened.
+   */
+  summary?: ScanSummary;
+  /** The stored result in full, or undefined until one has been fetched. */
   report?: VulnerabilityReport;
   /** True while this image is the one being scanned. */
   scanning: boolean;
@@ -34,6 +40,7 @@ export interface ImageScan {
  */
 export function useImageScan(reference: string): ImageScan {
   const status = useScannerStore((s) => s.status);
+  const summary = useScannerStore((s) => s.summaries[reference]);
   const report = useScannerStore((s) => s.reports[reference]);
   const setReport = useScannerStore((s) => s.setReport);
   const pushToast = useToastStore((s) => s.push);
@@ -70,9 +77,12 @@ export function useImageScan(reference: string): ImageScan {
     });
   }, []);
 
+  // Against the summary rather than the report: a finished scan lands in both,
+  // and the summary is the one that is there before the report has been asked
+  // for.
   const scanning =
     (status?.state === 'scanning' && status.target === reference) ||
-    (pending !== null && (report?.scannedAt ?? '') === pending);
+    (pending !== null && (summary?.scannedAt ?? '') === pending);
 
   const preparing =
     status?.state === 'installing' ||
@@ -80,7 +90,7 @@ export function useImageScan(reference: string): ImageScan {
     status?.state === 'updatingDatabase';
 
   const scan = async () => {
-    setPending(report?.scannedAt ?? '');
+    setPending(summary?.scannedAt ?? '');
 
     try {
       await api.scanImage(reference);
@@ -93,6 +103,7 @@ export function useImageScan(reference: string): ImageScan {
   };
 
   return {
+    summary,
     report,
     scanning,
     preparing,

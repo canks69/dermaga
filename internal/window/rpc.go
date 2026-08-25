@@ -202,14 +202,31 @@ func (a *Agent) connect() bool {
 	return true
 }
 
+// The largest single message the window will read.
+//
+// Snapshots carry every container, image and volume on the machine, so the
+// default 64 KB is not enough for a busy Mac. This is not a number anything is
+// expected to approach: the one message that ever did was every stored scan
+// result with all of its findings, and that is now answered as counts. A limit
+// is kept because the number has to come from somewhere, and an answer this
+// far past what the agent has to say is a runaway rather than a busy Mac.
+const maxMessage = 64 * 1024 * 1024
+
 func (a *Agent) read(conn net.Conn) {
 	scanner := bufio.NewScanner(conn)
-	// Snapshots carry every container, image and volume on the machine, so the
-	// default 64 KB line limit is not enough for a busy Mac.
-	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxMessage)
 
 	for scanner.Scan() {
 		a.receive(scanner.Bytes())
+	}
+
+	// A message too long to read ends this loop in exactly the way a closed
+	// connection does, and went unreported: the window said the agent had
+	// stopped, while the agent was still running and still listening, and every
+	// call made afterwards failed saying the same thing. The two are mended in
+	// completely different places, so which one happened is worth saying.
+	if err := scanner.Err(); err != nil {
+		log.Println("[dermaga] could not read from the agent:", err)
 	}
 
 	a.dropped()

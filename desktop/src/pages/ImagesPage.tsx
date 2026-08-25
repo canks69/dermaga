@@ -322,10 +322,10 @@ export function ImagesPage() {
  * they share a digest, so they share an answer.
  */
 function VulnerabilityCell({ group }: { group: ImageGroup }) {
-  const reports = useScannerStore((s) => s.reports);
+  const summaries = useScannerStore((s) => s.summaries);
   const scanning = useScannerStore((s) => s.status?.state === 'scanning');
 
-  const report = group.tags.map((t) => reports[t.reference]).find(Boolean);
+  const report = group.tags.map((t) => summaries[t.reference]).find(Boolean);
 
   if (!report) {
     return <Muted>{scanning ? 'scanning…' : '—'}</Muted>;
