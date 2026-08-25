@@ -9,7 +9,7 @@ import { useToastStore } from '../store/toastStore';
 import { useUIStore } from '../store/uiStore';
 import { useValidation } from '../hooks/useValidation';
 import { port as validPort, subdomain as validSubdomain } from '../utils/validate';
-import type { Route, TunnelKind, TunnelTarget, Zone } from '../types';
+import type { Route, TunnelKind, TunnelsStatus, TunnelTarget, Zone } from '../types';
 
 const KINDS: Segment<TunnelKind>[] = [
   { value: 'container', label: 'Container', icon: Boxes },
@@ -34,11 +34,14 @@ const KINDS: Segment<TunnelKind>[] = [
  */
 export function TunnelRoutePage({ route }: { route: Extract<Route, { name: 'tunnel-route' }> }) {
   const back = useUIStore((s) => s.back);
+  const navigate = useUIStore((s) => s.navigate);
   const editing = route.editing;
   const onClose = back;
   const [zones, setZones] = useState<Zone[] | null>(null);
   const [targets, setTargets] = useState<TunnelTarget[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Whether this Mac can publish anything at all. Null until asked.
+  const [setup, setSetup] = useState<TunnelsStatus | null | undefined>(undefined);
 
   // The domain is held as typed, not as an id: the field is something you can
   // search, so what is in it may not name a zone yet.
@@ -57,6 +60,28 @@ export function TunnelRoutePage({ route }: { route: Extract<Route, { name: 'tunn
   // form that arrives already answered has to be read and undone before the one
   // question somebody came with can be asked, and the answers it picks are
   // guesses -- the first domain of two dozen, the first container of six.
+  // Whether Cloudflare is connected and the connector installed, asked before
+  // anything else. The Tunnels page has always greyed out its own way in when
+  // the answer is no; the command palette reaches this page without passing
+  // that button, so the question is asked here as well -- a form cannot be the
+  // only thing standing between somebody and a call that has nowhere to go.
+  useEffect(() => {
+    let live = true;
+
+    void api
+      .getTunnelsStatus()
+      .then((status) => {
+        if (live) setSetup(status);
+      })
+      .catch(() => {
+        if (live) setSetup(null);
+      });
+
+    return () => {
+      live = false;
+    };
+  }, []);
+
   useEffect(() => {
     let live = true;
 
@@ -129,6 +154,37 @@ export function TunnelRoutePage({ route }: { route: Extract<Route, { name: 'tunn
   const loading = zones === null || targets === null;
   const noDomains = zones !== null && zones.length === 0;
   const noTargets = kind !== 'host' && targets !== null && ofKind.length === 0;
+
+  // Nothing this form asks for can be answered until Cloudflare is connected
+  // and the connector is on this Mac. Said here rather than left to the fields:
+  // a page of dropdowns that are empty because the account behind them was
+  // never linked explains nothing, and the way forward is on another page.
+  if (setup !== undefined && !(setup?.connected && setup.installed)) {
+    return (
+      <FormPage
+        backTo="Tunnels"
+        title={editing ? `Move ${editing.hostname}` : 'Add a route'}
+        subtitle="Publishing needs Cloudflare, and this Mac is not set up for it yet."
+        onClose={onClose}
+        footer={
+          <>
+            <button onClick={onClose} className="btn-ghost">
+              Cancel
+            </button>
+            <Button variant="primary" onClick={() => navigate({ name: 'tunnels' })}>
+              Open Tunnels
+            </Button>
+          </>
+        }
+      >
+        <p className="rounded-lg border border-ink-200 bg-ink-50 px-3 py-2 text-tiny text-ink-600 dark:border-ink-800 dark:bg-ink-900 dark:text-ink-400">
+          {setup?.connected
+            ? 'cloudflared is not installed. Tunnels is where Dermaga installs it.'
+            : 'Dermaga is not connected to Cloudflare. Tunnels is where that is done, with an API token.'}
+        </p>
+      </FormPage>
+    );
+  }
 
   return (
     <FormPage
