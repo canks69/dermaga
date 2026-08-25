@@ -66,7 +66,7 @@ export function Autocomplete({
   // Which one the keys are on. -1 is none, which is where it starts and where
   // it goes back to on every keystroke: the list narrows as you type, so a
   // remembered position is a position pointing at something else.
-  const [active, setActive] = useState(-1);
+  const [walked, setActive] = useState(-1);
   // Where the field was when the list opened, so the panel can be put under
   // it. Read once per opening rather than every render: the panel is not in
   // the layout, and asking the layout for a rectangle during one is how a
@@ -78,6 +78,13 @@ export function Autocomplete({
     ? options.filter((option) => option.value.toLowerCase().includes(needle))
     : options;
   const showing = open && matches.length > 0;
+
+  // What the keys are actually on, which is not always where they were put.
+  // `options` is pushed in from outside -- images and volumes arrive and go
+  // while this is open -- so a list that shrinks under a highlight sitting
+  // near its end leaves that highlight pointing past the end, and Return then
+  // takes a suggestion that is not there. Held to the last row instead.
+  const active = Math.min(walked, matches.length - 1);
 
   const show = () => {
     if (disabled || options.length === 0) return;
@@ -111,15 +118,28 @@ export function Autocomplete({
       close();
     };
 
+    // A scroll from inside the list is the list being read, not the field
+    // moving out from under it. Captured scrolls come from the whole document,
+    // the panel included, so this has to be told apart -- and it is the same
+    // question `away` asks of a click, answered the same way. Without it the
+    // list closed the moment it was scrolled, and arrowing past the last
+    // visible row closed it too: the row is brought into view by scrolling.
+    const elsewhere = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.(`[data-suggestions="${listId}"]`)) return;
+
+      close();
+    };
+
     window.addEventListener('mousedown', away);
     // Captured: what scrolls is the form inside the page, and a scroll there
     // does not bubble to the window.
-    window.addEventListener('scroll', close, true);
+    window.addEventListener('scroll', elsewhere, true);
     window.addEventListener('resize', close);
 
     return () => {
       window.removeEventListener('mousedown', away);
-      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('scroll', elsewhere, true);
       window.removeEventListener('resize', close);
     };
   }, [showing, listId]);
@@ -134,8 +154,10 @@ export function Autocomplete({
         return;
       }
 
+      // From where the highlight actually is, not from where it was last put:
+      // a list that shrank under it has already moved it.
       const step = event.key === 'ArrowDown' ? 1 : -1;
-      setActive((current) => (current + step + matches.length) % matches.length);
+      setActive((active + step + matches.length) % matches.length);
       return;
     }
 
