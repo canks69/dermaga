@@ -24,7 +24,15 @@ import type { Route } from '../types';
  */
 export function TaskLogPage({ route }: { route: Extract<Route, { name: 'task' }> }) {
   const back = useUIStore((s) => s.back);
-  const task = useTaskStore((s) => s.tasks.find((entry) => entry.id === route.id));
+  // Either name. `openTaskLog` translates the agent's name into the window's
+  // own, but only if the task list has been filled by then -- and on a launch
+  // from a notification the two arrive in no particular order, so the route can
+  // hold `build-7` rather than the id everything here is filed under. Matching
+  // one of them meant a page reading "nothing is running under that name" about
+  // a task sitting in the strip behind it.
+  const task = useTaskStore((s) =>
+    s.tasks.find((entry) => entry.id === route.id || entry.streamId === route.id)
+  );
 
   const body = useRef<HTMLDivElement>(null);
   // Whether the view is following the end of the output. It stops following
