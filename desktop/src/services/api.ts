@@ -22,6 +22,7 @@ import type {
   ToolchainStatus,
   UsagePoint,
   RegistryLogin,
+  ScanSummary,
   ScannerStatus,
   Tunnel,
   TunnelKind,
@@ -239,8 +240,12 @@ export const api = {
     return invoke('scanner.report', { reference });
   },
 
-  async getScanReports(): Promise<Record<string, VulnerabilityReport>> {
-    return (await invoke<Record<string, VulnerabilityReport>>('scanner.reports')) ?? {};
+  /**
+   * How every scanned image came out, counted rather than listed. The findings
+   * are asked for one image at a time, by `getScanReport`.
+   */
+  async getScanSummaries(): Promise<Record<string, ScanSummary>> {
+    return (await invoke<Record<string, ScanSummary>>('scanner.reports')) ?? {};
   },
 
   /** Puts a scan failure away, for the ones nothing here can fix. */

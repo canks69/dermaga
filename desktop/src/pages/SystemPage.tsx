@@ -49,8 +49,8 @@ export function SystemPage({ status }: { status: SystemStatus | null }) {
   // question is the same shape every time, only its consequences differ.
   const [cleaning, setCleaning] = useState<'images' | 'volumes' | 'containers' | null>(null);
   const scanner = useScannerStore((s) => s.status);
-  const reports = useScannerStore((s) => s.reports);
-  const scanCount = Object.keys(reports).length;
+  const summaries = useScannerStore((s) => s.summaries);
+  const scanCount = Object.keys(summaries).length;
   const [configPath, setConfigPath] = useState('~/.dermaga/config.json');
   const images = useResourceStore((s) => s.images);
   const containers = useResourceStore((s) => s.containers);

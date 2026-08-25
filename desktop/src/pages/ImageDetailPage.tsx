@@ -147,15 +147,20 @@ export function ImageDetailPage({ reference }: { reference: string }) {
             busy={scan.scanning}
             busyLabel="Scanning…"
             disabled={scan.preparing}
+            // The summary, not the report: whether this image has been scanned
+            // is known from the moment the window opens, while the report
+            // itself is fetched when this page is. Asking the report would
+            // have this button say "Scan" for the round trip in between, on an
+            // image scanned an hour ago.
             title={
-              scan.report
-                ? `Last scanned ${formatDuration(scan.report.scannedAt)} ago. Layers, packages and vulnerabilities all come from this one pass.`
+              scan.summary
+                ? `Last scanned ${formatDuration(scan.summary.scannedAt)} ago. Layers, packages and vulnerabilities all come from this one pass.`
                 : 'Reads the image for its layers, its packages and anything known to be wrong with them.'
             }
             onClick={() => void scan.scan()}
             iconOnly
           >
-            {scan.report ? 'Rescan' : 'Scan'}
+            {scan.summary ? 'Rescan' : 'Scan'}
           </Button>
           {/* The first thing anyone wants from an image, and until now the one
               thing this page could not do. */}
@@ -657,10 +662,16 @@ function LayersPane({ variant, scan }: { variant: ImageVariant; scan: ImageScan 
         <span className="label-mono normal-case">
           {steps.length} build step{steps.length === 1 ? '' : 's'} · {layers} layer
           {layers === 1 ? '' : 's'} · {formatBytes(variant.sizeInBytes)} altogether
+          {/* Three states, not two. Between them is the moment the report is
+              being fetched, where the image has been scanned but its layers
+              are not here yet -- and telling somebody to rescan then would
+              cost them a scan they did not need. */}
           {!sized &&
             (scan.report
               ? ' · rescan to size each layer'
-              : ' · sizes appear once this image has been scanned')}
+              : scan.summary
+                ? ''
+                : ' · sizes appear once this image has been scanned')}
         </span>
       </PaneBar>
 

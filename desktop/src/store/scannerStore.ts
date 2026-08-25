@@ -2,24 +2,44 @@ import { create } from 'zustand';
 import { api } from '../services/api';
 import { useToastStore } from './toastStore';
 import { onNotify } from '../services/ipc';
-import type { ScannerStatus, VulnerabilityReport } from '../types';
+import type { ScannerStatus, ScanSummary, VulnerabilityReport } from '../types';
 
 interface ScannerState {
   status: ScannerStatus | null;
-  /** Last report per image reference, so reopening a tab is instant. */
+  /**
+   * How every scanned image came out. Filled for all of them on opening, and
+   * it is what every list showing severity counts reads.
+   */
+  summaries: Record<string, ScanSummary>;
+  /**
+   * Last full report per image reference, so reopening a tab is instant. Only
+   * for images somebody has actually opened: the findings are thousands of
+   * rows each, and asking for all of them at once is what used to take the
+   * connection down.
+   */
   reports: Record<string, VulnerabilityReport>;
   setStatus: (status: ScannerStatus) => void;
+  setSummaries: (summaries: Record<string, ScanSummary>) => void;
   setReport: (reference: string, report: VulnerabilityReport) => void;
   clearReports: () => void;
 }
 
 export const useScannerStore = create<ScannerState>((set) => ({
   status: null,
+  summaries: {},
   reports: {},
   setStatus: (status) => set({ status }),
+  setSummaries: (summaries) =>
+    set((state) => ({ summaries: { ...state.summaries, ...summaries } })),
   setReport: (reference, report) =>
-    set((state) => ({ reports: { ...state.reports, [reference]: report } })),
-  clearReports: () => set({ reports: {} }),
+    set((state) => ({
+      reports: { ...state.reports, [reference]: report },
+      // A report answers the counted question as well, so a scan that finishes
+      // while its image is open updates the list behind it without a second
+      // round trip.
+      summaries: { ...state.summaries, [reference]: report },
+    })),
+  clearReports: () => set({ summaries: {}, reports: {} }),
 }));
 
 /**
@@ -28,7 +48,7 @@ export const useScannerStore = create<ScannerState>((set) => ({
  * from the app root.
  */
 export function subscribeToScanner(): () => void {
-  const { setStatus, setReport } = useScannerStore.getState();
+  const { setStatus, setSummaries, setReport } = useScannerStore.getState();
 
   // The agent may have finished its startup checks -- and a whole sweep of
   // scans -- before this window existed, so take what it already has.
@@ -37,11 +57,11 @@ export function subscribeToScanner(): () => void {
     .then(setStatus)
     .catch(() => {});
 
+  // Counts, not findings. Every image at once, which is why it has to be the
+  // small half of a report.
   void api
-    .getScanReports()
-    .then((reports) => {
-      for (const [reference, report] of Object.entries(reports)) setReport(reference, report);
-    })
+    .getScanSummaries()
+    .then(setSummaries)
     .catch(() => {});
 
   return onNotify((message) => {

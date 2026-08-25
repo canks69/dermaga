@@ -81,14 +81,19 @@ func (m *Manager) forget(references []string) {
 	}
 }
 
-// Reports is every result held, for the UI to summarise in a list.
-func (m *Manager) Reports() map[string]Report {
+// Briefs is every result held, counted rather than listed.
+//
+// The findings are deliberately not here. This answers the window's first
+// question on opening -- what has been scanned, and how did it come out -- and
+// that screen shows counts. See Brief for what happens when the findings come
+// along for the ride.
+func (m *Manager) Briefs() map[string]Brief {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	out := make(map[string]Report, len(m.reports))
+	out := make(map[string]Brief, len(m.reports))
 	for reference, report := range m.reports {
-		out[reference] = report
+		out[reference] = report.brief()
 	}
 
 	return out
