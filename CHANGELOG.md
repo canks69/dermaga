@@ -7,6 +7,31 @@ GitHub release for each tag carries that generated list with its commit hashes.
 This project follows [semantic versioning](https://semver.org): the version is bumped for what the
 change means to someone using Dermaga, not for how much code moved.
 
+## [v1.13.0] — 2026-08-26
+
+### Added
+
+- **Dermaga says when Apple's `container` CLI wants updating, without being asked.** A dot on the
+  System entry in the sidebar: amber when a newer release is waiting, red when the CLI on this Mac is
+  older than Dermaga is written for — which is not an offer but an explanation, since that is the
+  reason something else in the app is about to behave oddly. Both are worked out on Dermaga's own
+  schedule, once when it starts and every six hours after, so a release that appeared while you were
+  not looking is visible without opening anything. Nothing is asked of Homebrew while the app is
+  merely running. A notification says it once for each version rather than once for each launch —
+  somebody who leaves an update for later opens Dermaga a dozen times before they get round to it,
+  and being told a dozen times is how a notification stops being read. It has its own switch beside
+  the other two in Settings, and pressing it opens the System page.
+
+### Fixed
+
+- **The update check said "Could not check for updates" precisely when there was one.** `brew
+  outdated` exits with a failing status exactly when something *is* outdated, and prints its answer
+  anyway. Reading that status as failure inverted the whole feature: "Up to date." whenever it was,
+  and "Could not check for updates." the moment there was anything to say. The update button could
+  never appear for anybody, because the only case that would have shown it was the case being thrown
+  away. The answer is now what decides whether the command worked, and the exit status is read only
+  when there is no answer to read.
+
 ## [v1.12.0] — 2026-08-25
 
 This release carries work from @canks69 and @ryanbekhen.
