@@ -7,6 +7,46 @@ GitHub release for each tag carries that generated list with its commit hashes.
 This project follows [semantic versioning](https://semver.org): the version is bumped for what the
 change means to someone using Dermaga, not for how much code moved.
 
+## [v1.15.0] — 2026-08-27
+
+### Added
+
+- **Shared memory, scratch space and resource limits, which the runtime has always taken.**
+  `/dev/shm` is 64 MB unless something says otherwise, and Postgres and headless Chrome both fall
+  over on that — Postgres saying it could not resize a shared memory segment, Chrome by losing a tab,
+  neither of them mentioning shared memory at all. It has a field beside CPUs and memory now, because
+  it *is* memory. A **tmpfs** joins volume and bind as a third kind of mount: a directory that lives
+  in RAM and goes when the container does, which is what a framework cache or a busy `/tmp` should
+  be. It takes only the path — there is nothing on the host to name — so the row says so where the
+  source would be. And **resource limits** get a group of their own. Not for `nofile`, which is the
+  reason usually given and is already a million here: what is tight is `nproc` at 1503, which a
+  process pool can reach, and locked memory at 8 MB, which a Redis told to `mlock` will want. All
+  three survive an edit, which was checked against the runtime before any of it was written.
+- **A build can reach a private repository.** `--ssh default` forwards this Mac's SSH agent into the
+  build, which is what a Dockerfile needs for `go mod download`, `composer install` or a private npm
+  registry. The agent is reached through a socket while a step runs; no key is written into the image,
+  which is the difference between this and copying one in and hoping a later layer removes it.
+
+### Fixed
+
+- **A filter that could be mistaken for a button.** Somebody updated Apple's CLI, the container
+  services stopped, and starting them again from inside Dermaga left an empty list — their containers
+  appeared only after pressing what looked like a stop button. Nothing had been lost: after the
+  services restart every container is stopped, and the filter that hides stopped ones was off. That
+  filter wore a square, the same square this window uses in three other places to mean *stop this
+  container*, one of them a button in the very same row, and the two states were separated by nothing
+  but opacity. The filters are words now, behind one button, and they say what they do rather than
+  naming a state — "Show containers that are not running" rather than "Stopped". The message shown
+  when a filter has emptied the list names where the switch lives, too: telling somebody to turn one
+  on without saying where it is, is how an empty list stays empty.
+
+### Changed
+
+- **The migration from the JSON files Dermaga wrote before 1.9.0 is gone.** It imported each file into
+  the database and deleted it, so anybody who has run any version since has nothing left for it to
+  find. Upgrading straight from 1.9.0 or earlier now costs one slow first launch and nothing else:
+  all of what it carried was cache.
+
 ## [v1.14.0] — 2026-08-27
 
 This release carries work from @ryanbekhen.
