@@ -1,5 +1,28 @@
 [
   {
+    "version": "v1.14.0",
+    "date": "2026-08-27",
+    "summary": "",
+    "sections": [
+      {
+        "title": "Added",
+        "entries": [
+          "**Projects: a point of view over what is on this Mac.** Many repositories, one flat list. A project groups what belongs to one piece of work, and everything that already exists is in `default`, which is the absence of a project rather than a place things were moved to — nothing was written and nothing was touched. A project *filters*: it decides what is shown and what a new thing is named, never what anything can reach, and two containers in different projects talk to each other exactly as they did before. What is born in one carries its name — `linxpay_whoami`, `linxpay_app:dev`, `linxpay_data` — with the underscore Compose uses, because people arrive already reading `myapp_db` as \"db, in myapp\". That prefix costs something, and it is shown in the form for exactly that reason: a container's name is its address on every network it joins, so a prefixed container answers at `linxpay_db` and not at `db`. The alternative was a second project being unable to hold a `dashboard` at all. Each project gets a network, made with it and removed with it while nothing is attached — the one part that does something rather than filtering, and what lets services born together find each other by name. The rules differ by kind and each says what it is: containers and volumes are filed by record, so something that predates projects can join one without being touched; an image belongs where it was *built*, and anything pulled stays global, because a project that cannot see the image it is about to run is a project getting in the way. There is no moving between projects, and that is deliberate — nothing here can be renamed, so a real move meant destroying and rebuilding, which is where every half-finished state came from. Marked beta."
+        ]
+      },
+      {
+        "title": "Fixed",
+        "entries": [
+          "**A release cannot go out without its contributors.** v1.13.0 shipped with no names on its What's new entry and nothing reported a problem: the step that works them out could not reach GitHub, and \"there is nobody to name\" and \"I could not find out\" were the same empty answer. They are not. Every release has an author, so an empty answer is a question that did not get through — usually commits that are still only on the machine cutting the release. It now stops before the tag when GitHub cannot be asked, when nobody could be named, when only *some* authors could be, and when the version has no entry to put names into. And the built app is checked at the end, where the question was always really being asked: a bundle carrying no credit, or one that does not mention the version being released, fails the build. v1.13.0's own line is filled in.",
+          "**A bind mount comes back from the runtime as a bind mount.** The edit form showed the type as `volume` and the bound path in the box where a volume name goes. The runtime takes `type=bind` and reports it back as `virtiofs`, which is the transport rather than the kind, and the selector fell back to its first option on a word it had never heard of. Cosmetic only until Save: what a selector shows is what a save sends, so recreating would have asked for a volume named after somebody's source directory, and the container would have come back with an empty folder where the work was.",
+          "**An edit that cannot work leaves the container alone.** Editing recreates, and a recreate has to delete before it can run — a container's name is its id here, and there is no rename to move the old one aside with. Anything the new settings got wrong used to be discovered inside that gap, with the container already gone. The container is now built once under a name of its own and thrown away before anything is taken apart, which catches an image that has been deleted since and a bind mount whose directory has moved. It narrows the gap rather than closing it: layers are unpacked at start, so an image whose content is incomplete still fails afterwards.",
+          "**Saving a container stops asking whether to discard it.** Pressing recreate answered with \"Leave without saving? … Nothing has been created yet.\" — about a recreate that had just been confirmed and started. Throwing an unfinished edit away had the same problem: that *is* the answer to the question about leaving, not a reason to be asked it again on the way out.",
+          "**`make dev` no longer reaches for the network to start.** It died on a package that existed and was empty, left behind by a download interrupted halfway into a temporary cache. The tools it runs are installed with everything else now, so their versions are in the lockfile and starting the app never waits on a download."
+        ]
+      }
+    ]
+  },
+  {
     "version": "v1.13.0",
     "date": "2026-08-26",
     "summary": "This release carries work from @ryanbekhen.",
