@@ -9,6 +9,8 @@ change means to someone using Dermaga, not for how much code moved.
 
 ## [v1.14.0] — 2026-08-27
 
+This release carries work from @ryanbekhen.
+
 ### Added
 
 - **Projects: a point of view over what is on this Mac.** Many repositories, one flat list. A project
