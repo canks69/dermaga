@@ -9,6 +9,8 @@ change means to someone using Dermaga, not for how much code moved.
 
 ## [v1.15.0] — 2026-08-27
 
+This release carries work from @ryanbekhen.
+
 ### Added
 
 - **Shared memory, scratch space and resource limits, which the runtime has always taken.**
