@@ -1,5 +1,25 @@
 [
   {
+    "version": "v1.16.0",
+    "date": "2026-08-28",
+    "summary": "This release carries work from @ryanbekhen.",
+    "sections": [
+      {
+        "title": "Changed",
+        "entries": [
+          "**The menu bar item opens a panel, not a menu.** A menu can be styled in exactly two places, the text and the icon. Everything else — background, highlight, row height, corners — belongs to macOS, so a row carrying a start button is a row that *almost* matches the ones above it, and a menu is where people are least forgiving about almost. What hangs under the icon now is a page of the app in a frameless window: what is running and what is not, filtered by the project in force and following the same rules the window's own lists follow, with start and stop on every row — always visible rather than appearing under the pointer, because a panel opened to start something that shows nothing to press until the mouse finds the right line is a list, not a panel. The project switcher is there, so is starting the services when they are down, and so is an update already downloaded. Either mouse button opens it; Escape or a click anywhere else takes it down. It is sized to whatever the page turns out to be, and the list scrolls once it would grow past the screen rather than running off the bottom of it. Opening it brings the app forward, which is the cost of it being an ordinary window: only the active app has a key window, and a panel that is not key cannot be dismissed with Escape and answers its first click by taking focus instead of doing what was pressed."
+        ]
+      },
+      {
+        "title": "Fixed",
+        "entries": [
+          "**The menu bar and the sidebar could disagree about which project was in force.** Preferences are announced now — the agent sends `settings.changed` on every save and the window applies what it did not write itself — so switching project in one place switches it in both. Applied only where it differs, and never written back: a value written back comes round again as another announcement, and with anything correcting what arrives, the correction and the echo take turns forever. That is not hypothetical. It ran at several hundred writes a second until the app was killed, and there is a test for it now.",
+          "**\"All projects\" did not survive a restart.** `activeProject` was left out of the settings file when it was empty, and empty is exactly what \"all\" is — the one choice the file could not hold."
+        ]
+      }
+    ]
+  },
+  {
     "version": "v1.15.0",
     "date": "2026-08-27",
     "summary": "This release carries work from @ryanbekhen.",

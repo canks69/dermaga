@@ -9,6 +9,8 @@ change means to someone using Dermaga, not for how much code moved.
 
 ## [v1.16.0] — 2026-08-28
 
+This release carries work from @ryanbekhen.
+
 ### Changed
 
 - **The menu bar item opens a panel, not a menu.** A menu can be styled in exactly two places, the
